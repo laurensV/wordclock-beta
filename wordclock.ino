@@ -1,3 +1,5 @@
+#include <EEPROM.h>
+#include <DS3231.h>
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <ArduinoOTA.h>
 
@@ -11,6 +13,9 @@
 #define AP_SSID "JouwWoordklok"
 #define HOSTNAME "jouwwoordklok"
 
+#define EEPROM_SIZE 4      // size of EEPROM to save persistent variables
+#define ADR_RTC 0
+
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
@@ -19,6 +24,8 @@ long lastNTPUpdate = millis();
 
 WiFiManager wifiManager;
 UDPLogger logger;
+DS3231 rtc;
+bool h12, hPM;
 
 // ----------------------------------------------------------------------------------
 //                                        SETUP
@@ -28,9 +35,14 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.printf("\nSketchname: %s\nBuild: %s\n", (__FILE__), (__TIMESTAMP__));
-  logger.log("before WiFi");
-  // Uncomment and run it once, if you want to erase all the stored wifi information
-  // wifiManager.resetSettings();
+
+  //Init EEPROM
+  EEPROM.begin(EEPROM_SIZE);
+
+  // Uncomment and run it once, if you want to erase stored info
+  reset();
+
+  setupRTC();
 
   setupWifiManager();
   if (wifiManager.autoConnect(AP_SSID)) {
@@ -56,6 +68,11 @@ void loop() {
 
   if (heartbeatInterval()) {
     logger.log("heartbeat");
+    int hours = rtc.getHour(h12, hPM);
+    int minutes = rtc.getMinute();
+    logger.log(String(hours) + ":" + String(minutes));
+    String message = timeToString(hours, minutes);
+    logger.log(message);
     checkWifiDisconnect();
   }
 }
@@ -107,7 +124,7 @@ void printIP() {
 }
 void configModeCallback(WiFiManager* wm) {
   logger.log("Entered AP config mode");
-  logger.log(WiFi.softAPIP());
+  logger.log(WiFi.softAPIP().toString());
 
   logger.log(wm->getConfigPortalSSID());
 }
@@ -131,4 +148,94 @@ void onWifiConnect() {
 void setupOTP() {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
+}
+
+void setupRTC() {
+  // Start the I2C interface (needed for DS3231 clock)
+  Wire.begin();
+  rtc.setClockMode(false);
+  if (readIntEEPROM(ADR_RTC) && rtc.getYear()) {
+    logger.log("RTC already set, skipping set time");
+  } else {
+    if (readIntEEPROM(ADR_RTC)) {
+      logger.log("WARNING: RTC lost power. Compile again or connect the WiFi to sync the time");
+    }
+    DateTime compiled = DateTime(__DATE__, __TIME__);
+    logger.log("setting RTC to compile time");
+    rtc.setYear(compiled.year() % 100);
+    rtc.setMonth(compiled.month());
+    rtc.setDate(compiled.day());
+    rtc.setHour(compiled.hour());
+    rtc.setMinute((compiled.minute() + 1) % 60);
+    rtc.setSecond(0);
+    writeIntEEPROM(ADR_RTC, 1);
+  }
+}
+
+void reset() {
+  logger.log("resetting WiFi settings");
+  wifiManager.resetSettings();
+
+  logger.log("empty entire EEPROM");
+  for (int i = 0; i < EEPROM.length(); i++) {
+    EEPROM.write(i, 0);
+  }
+}
+
+/**
+ * @brief Write value to EEPROM
+ *
+ * @param address address to write the value
+ * @param value value to write
+ */
+void writeIntEEPROM(int address, int value) {
+  EEPROM.put(address, value);
+  EEPROM.commit();
+}
+
+/**
+ * @brief Read value from EEPROM
+ *
+ * @param address address
+ * @return int value
+ */
+int readIntEEPROM(int address) {
+  int value;
+  EEPROM.get(address, value);
+  return value;
+}
+
+/**
+ * @brief Converts the given time as sentence (String)
+ *
+ * @param hours hours of the time value
+ * @param minutes minutes of the time value
+ * @return String time as sentence
+ */
+String timeToString(uint8_t hours, uint8_t minutes) {
+  String message = "HET IS ";
+
+  String minuteWords[] = { "EEN", "TWEE", "DRIE", "VIER", "VIJF", "ZES", "ZEVEN", "ACHT", "NEGEN", "TIEN", "ELF", "TWAALF", "DERTIEN", "VEERTIEN", "KWART", "ZES -TIEN", "ZEVEN -TIEN", "ACHT -TIEN", "NEGEN-TIEN" };
+  //show minutes
+  if (minutes > 0 && minutes < 20) {
+    message += minuteWords[minutes - 1] + " OVER ";
+  } else if (minutes >= 20 && minutes < 30) {
+    message += minuteWords[29 - minutes] + " VOOR HALF ";
+  } else if (minutes == 30) {
+    message += "HALF ";
+  } else if (minutes > 30 && minutes < 45) {
+    message += minuteWords[minutes - 31] + " OVER HALF ";
+  } else if (minutes >= 45 && minutes <= 59) {
+    message += minuteWords[59 - minutes] + " VOOR ";
+  }
+
+  //convert hours to 12h format
+  if (hours >= 12) hours -= 12;
+  if (minutes >= 20) hours++;
+  if (hours == 0) hours = 12;
+  message += minuteWords[hours - 1] + " ";
+
+  if (minutes == 0) message += "UUR ";
+
+  return message;
 }

@@ -14,6 +14,7 @@ Choose bord NodeMCU 1.0 (ESP-12E Module)
 
 ### Libraries
 https://github.com/tzapu/WiFiManager
+https://github.com/NorthernWidget/DS3231
 
 ### Logger
 After establishing WiFi connection, you can also see the logs in your network with the following python script:
