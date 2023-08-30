@@ -14,7 +14,7 @@
 #include "src/udplogger.h"
 
 // ----------------------------------------------------------------------------------
-//                               CLOCK SPECIFIC VARIABLES
+//                               WORDCLOCK LAYOUT
 // ----------------------------------------------------------------------------------
 char letters[13][13] = {
   {'H','E','T','V','I','S','N','E','E','N','Z','E','S'},
@@ -36,7 +36,7 @@ char letters[13][13] = {
 //                                        CONSTANTS
 // ----------------------------------------------------------------------------------
 #define PERIOD_HEARTBEAT 1000UL
-#define PERIOD_NTP_UPDATE 30 * 1000UL
+#define PERIOD_NTP_UPDATE 60 * 1000UL
 #define AP_SSID "JouwWoordklok"
 #define HOSTNAME "jouwwoordklok"
 #define TIMEZONE TZ_Europe_Amsterdam
@@ -55,7 +55,6 @@ UDPLogger logger;
 
 DS3231 rtc;
 bool h12, hPM;
-time_t now;
 // ----------------------------------------------------------------------------------
 //                                        SETUP
 // ----------------------------------------------------------------------------------
@@ -186,13 +185,8 @@ void setupTime() {
       log("WARNING: RTC lost power. Compile again or connect the WiFi to sync the time");
     }
     DateTime compiled = DateTime(__DATE__, __TIME__);
-    log("setting RTC to compile time");
-    rtc.setYear(compiled.year() % 100);
-    rtc.setMonth(compiled.month());
-    rtc.setDate(compiled.day());
-    rtc.setHour(compiled.hour());
-    rtc.setMinute((compiled.minute() + 1) % 60);
-    rtc.setSecond(0);
+    log("setting RTC to compile time + 33 seconds");
+    rtc.setEpoch(compiled.unixtime() + 33);
     writeIntEEPROM(ADR_RTC, 1);
   }
   // callback for ntp
@@ -268,11 +262,9 @@ String timeToString(uint8_t hours, uint8_t minutes) {
 }
 
 // NTP functions
-void ntp_update(bool from_sntp) {
-  log(F("Time updated from NTP server! from_sntp="));
-  log(from_sntp);
-  time(&now); // read the current time
-  rtc.setEpoch(now, true); // set rtc to current local time
+void ntp_update() {
+  log("Time updated from NTP server!");
+  rtc.setEpoch(time(nullptr), true); // set rtc to current local time
 }
 uint32_t sntp_update_delay_MS_rfc_not_less_than_15000() {
   return PERIOD_NTP_UPDATE;
