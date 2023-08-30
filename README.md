@@ -13,8 +13,8 @@ Board can be installed by adding this additional board url:
 http://arduino.esp8266.com/stable/package_esp8266com_index.json
 
 ### Libraries
-* https://github.com/tzapu/WiFiManager
-* https://github.com/NorthernWidget/DS3231
+* WiFiManager: https://github.com/tzapu/WiFiManager
+* DS3231: https://github.com/NorthernWidget/DS3231
 
 ### Logger
 After establishing WiFi connection, you can also see the logs in your local network with the following python script:
