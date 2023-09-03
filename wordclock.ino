@@ -63,7 +63,6 @@ WiFiManager wifiManager;
 UDPLogger logger;
 
 DS3231 rtc;
-bool h12, hPM;
 
 Adafruit_NeoMatrix matrix(CLOCK_WIDTH, CLOCK_HEIGHT, NEOPIXEL_PIN,
   NEO_MATRIX_TOP + NEO_MATRIX_LEFT +
@@ -116,8 +115,12 @@ void loop() {
   ArduinoOTA.handle();
 
   if (heartbeatInterval()) {
-    int hours = rtc.getHour(h12, hPM);
-    int minutes = rtc.getMinute();
+    time_t timeNowUTC;
+    struct tm* timeInfo;
+    timeNowUTC = (RTClib::now()).unixtime(); // time(nullptr);
+    timeInfo = localtime(&timeNowUTC);
+    int hours = timeInfo->tm_hour;
+    int minutes = timeInfo->tm_min;
     log(String(hours) + ":" + String(minutes));
     String timeString = timeToString(hours, minutes);
     log(timeString);
@@ -269,22 +272,33 @@ void setupOTA() {
 }
 
 void setupTime() {
+  // Set timezone
+  setTZ(TIMEZONE);
   // Start the I2C interface (needed for DS3231 clock)
   Wire.begin();
   rtc.setClockMode(false);
-  if (readIntEEPROM(ADR_RTC) && rtc.getYear()) {
+  if ((readIntEEPROM(ADR_RTC) && rtc.getYear())) {
     log("RTC already set, skipping set time");
   } else {
     if (readIntEEPROM(ADR_RTC)) {
       log("WARNING: RTC lost power. Compile again or connect the WiFi to sync the time");
     }
     DateTime compiled = DateTime(__DATE__, __TIME__);
-    log("setting RTC to compile time + 33 seconds");
-    rtc.setEpoch(compiled.unixtime() + 33);
+    time_t local_compile = compiled.unixtime();
+    struct tm* tmptime;
+    tmptime = localtime(&local_compile);
+    tmptime->tm_isdst = 0;
+    int32_t offset = mktime(tmptime) - mktime(gmtime(&local_compile));
+    log("setting RTC to compile UTC time + 33 seconds");
+    rtc.setEpoch(local_compile - offset + 33);
     writeIntEEPROM(ADR_RTC, 1);
   }
-  // callback for ntp
-  settimeofday_cb(ntp_update);
+
+  // callback for set time updates
+  settimeofday_cb(time_set);
+  // set the system time to the RTC time
+  // timeval tv = { (RTClib::now()).unixtime(), 0 };
+  // settimeofday(&tv, nullptr);
 }
 
 void reset() {
@@ -356,9 +370,14 @@ String timeToString(uint8_t hours, uint8_t minutes) {
 }
 
 // NTP functions
-void ntp_update() {
-  log("Time updated from NTP server!");
-  rtc.setEpoch(time(nullptr), true); // set rtc to current local time
+void time_set(bool from_sntp) {
+  if (from_sntp) {
+    log("System time updated from NTP server");
+    // Update RTC if time came from NTP server
+    rtc.setEpoch(time(nullptr));
+  } else {
+    log("System time updated from RTC");
+  }
 }
 uint32_t sntp_update_delay_MS_rfc_not_less_than_15000() {
   return PERIOD_NTP_UPDATE;
