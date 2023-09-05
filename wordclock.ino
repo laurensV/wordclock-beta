@@ -12,6 +12,8 @@
 #include <Adafruit_NeoPixel.h> // https://github.com/adafruit/Adafruit_NeoPixel
 #include <Adafruit_GFX.h> // https://github.com/adafruit/Adafruit_GFX
 #include <Adafruit_NeoMatrix.h> // https://github.com/adafruit/Adafruit_NeoMatrix
+#include <esp8266fota.h> // https://github.com/stardusteddy/esp8266FOTA
+#include <WiFiClientSecure.h>
 
 // own services
 #include "src/udplogger.h"
@@ -19,7 +21,8 @@
 // ----------------------------------------------------------------------------------
 //                                        CONSTANTS
 // ----------------------------------------------------------------------------------
-#define PERIOD_HEARTBEAT 1000UL
+#define PERIOD_READTIME 1000UL
+#define PERIOD_WIFICHECK 20000UL
 #define PERIOD_NTP_UPDATE 60 * 1000UL
 #define AP_SSID "JouwWoordklok"
 #define HOSTNAME "jouwwoordklok"
@@ -56,13 +59,15 @@ ELFLNUURDUS**";
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
-long lastHeartBeat = 0;
+long lastReadTime = 0, lastWifiCheck = 0;
 
 WiFiManager wifiManager;
 
 UDPLogger logger;
 
 DS3231 rtc;
+
+esp8266FOTA FOTA("wordclock", 1);
 
 Adafruit_NeoMatrix matrix(CLOCK_WIDTH, CLOCK_HEIGHT, NEOPIXEL_PIN,
   NEO_MATRIX_TOP + NEO_MATRIX_LEFT +
@@ -77,14 +82,13 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.printf("\nSketchname: %s\nBuild: %s\n", (__FILE__), (__TIMESTAMP__));
-  // pinMode(LED_BUILTIN, OUTPUT); // Onboard LED
-  // digitalWrite(LED_BUILTIN, LOW); // Switch on LED
 
   //Init EEPROM
   EEPROM.begin(EEPROM_SIZE);
 
   // Uncomment and run it once, if you want to erase stored info
-  reset();
+  // reset();
+
 
   setupTime();
 
@@ -114,7 +118,7 @@ void loop() {
   wifiManager.process();
   ArduinoOTA.handle();
 
-  if (heartbeatInterval()) {
+  if (readTimeInterval()) {
     time_t timeNowUTC;
     struct tm* timeInfo;
     timeNowUTC = (RTClib::now()).unixtime(); // time(nullptr);
@@ -124,8 +128,11 @@ void loop() {
     log(String(hours) + ":" + String(minutes));
     String timeString = timeToString(hours, minutes);
     log(timeString);
-    checkWifiDisconnect();
     showTimeString(timeString);
+
+  }
+  if (checkWifiInterval()) {
+    checkWifiDisconnect();
   }
 }
 
@@ -205,9 +212,15 @@ String split(String s, char parser, int index) {
   return rs;
 }
 
-bool heartbeatInterval() {
-  bool interval = millis() - lastHeartBeat > PERIOD_HEARTBEAT;
-  if (interval) lastHeartBeat = millis();
+bool readTimeInterval() {
+  bool interval = millis() - lastReadTime > PERIOD_READTIME;
+  if (interval) lastReadTime = millis();
+  return interval;
+}
+
+bool checkWifiInterval() {
+  bool interval = millis() - lastWifiCheck > PERIOD_WIFICHECK;
+  if (interval) lastWifiCheck = millis();
   return interval;
 }
 
@@ -217,8 +230,10 @@ bool isWifiConnected() {
 
 void checkWifiDisconnect() {
   if (!wifiManager.getConfigPortalActive()) {
-    if (WiFi.status() != WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED || true) {
       log("no wifi connection..");
+      matrix.drawPixel(3, 7, matrix.Color(255, 0, 0));
+      matrix.show();
     } else if (WiFi.localIP().toString() == "0.0.0.0") {
       // detected bug: ESP8266 - WiFi status not changing
       // https://github.com/esp8266/Arduino/issues/2593#issuecomment-323801447
@@ -260,6 +275,11 @@ void setupWifiManager() {
 }
 
 void onWifiConnect() {
+  FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
+  bool updatedNeeded = FOTA.execHTTPcheck();
+  if (updatedNeeded) {
+    FOTA.execOTA();
+  }
   setupOTA();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
