@@ -1,0 +1,17 @@
+name: build
+on: [push, pull_request]
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Compile
+        uses: ArminJo/arduino-test-compile@v3
+      with:
+        arduino-board-fqbn: esp8266:esp8266:nodemcuv2
+        platform-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
+        required-libraries: ArduinoJson,Adafruit NeoPixel, Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX

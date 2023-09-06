@@ -12,11 +12,11 @@
 #include <Adafruit_NeoPixel.h> // https://github.com/adafruit/Adafruit_NeoPixel
 #include <Adafruit_GFX.h> // https://github.com/adafruit/Adafruit_GFX
 #include <Adafruit_NeoMatrix.h> // https://github.com/adafruit/Adafruit_NeoMatrix
-#include <esp8266fota.h> // https://github.com/stardusteddy/esp8266FOTA
 #include <WiFiClientSecure.h>
 
 // own services
 #include "src/udplogger.h"
+#include "src/esp8266fota.h"
 
 // ----------------------------------------------------------------------------------
 //                                        CONSTANTS
@@ -27,6 +27,7 @@
 #define AP_SSID "JouwWoordklok"
 #define HOSTNAME "jouwwoordklok"
 #define TIMEZONE TZ_Europe_Amsterdam
+#define VERSION 1
 
 #define EEPROM_SIZE 4      // size of EEPROM to save persistent variables
 #define ADR_RTC 0
@@ -67,7 +68,7 @@ UDPLogger logger;
 
 DS3231 rtc;
 
-esp8266FOTA FOTA("wordclock", 1);
+esp8266FOTA FOTA("wordclock", VERSION);
 
 Adafruit_NeoMatrix matrix(CLOCK_WIDTH, CLOCK_HEIGHT, NEOPIXEL_PIN,
   NEO_MATRIX_TOP + NEO_MATRIX_LEFT +
@@ -133,6 +134,17 @@ void loop() {
   }
   if (checkWifiInterval()) {
     checkWifiDisconnect();
+    if (isWifiConnected()) {
+      log('checking for new updates..');
+      FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
+      bool updatedNeeded = FOTA.execHTTPcheck();
+      if (updatedNeeded) {
+        log('New update available!');
+        FOTA.execOTA();
+      } else {
+        log('Already running latest version');
+      }
+    }
   }
 }
 
@@ -230,7 +242,7 @@ bool isWifiConnected() {
 
 void checkWifiDisconnect() {
   if (!wifiManager.getConfigPortalActive()) {
-    if (WiFi.status() != WL_CONNECTED || true) {
+    if (WiFi.status() != WL_CONNECTED) {
       log("no wifi connection..");
       matrix.drawPixel(3, 7, matrix.Color(255, 0, 0));
       matrix.show();
@@ -275,11 +287,6 @@ void setupWifiManager() {
 }
 
 void onWifiConnect() {
-  FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
-  bool updatedNeeded = FOTA.execHTTPcheck();
-  if (updatedNeeded) {
-    FOTA.execOTA();
-  }
   setupOTA();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
