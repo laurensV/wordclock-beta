@@ -17,8 +17,8 @@ jobs:
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
     - name: Move bin file
       run: |
-        ls -al $GITHUB_WORKSPACE/src/
-        ls -al $GITHUB_WORKSPACE/src/wordclock
+        ls -al $GITHUB_WORKSPACE/        
         ls -al $HOME
+        ls -al $GITHUB_WORKSPACE/build
         ls -al $HOME/wordclock
         
