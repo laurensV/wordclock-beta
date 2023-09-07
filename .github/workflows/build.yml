@@ -9,6 +9,7 @@ on:
       - 'scripts/**'
       - 'README.md'
       - '.gitignore'
+permissions: write-all      
 jobs:
   build:
     name: Build
@@ -26,6 +27,8 @@ jobs:
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
     - name: Commit bin file
       if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
       run: |
         mv $HOME/wordclock/build/esp8266.esp8266.nodemcuv2/wordclock.ino.bin firmware/
         git config --global user.name 'laurensV'
