@@ -17,7 +17,5 @@ jobs:
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
     - name: Move bin file
       run: |
-        ls -al $HOME
-        ls -al $HOME/wordclock
-        ls -al $HOME/wordclock/build
+        ls -al $HOME/wordclock/build/esp8266.esp8266.nodemcuv2
         
