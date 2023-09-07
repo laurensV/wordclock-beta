@@ -1,5 +1,14 @@
 name: build
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'firmware/**'
+      - 'scripts/**'
+      - 'README.md'
+      - '.gitignore'
 jobs:
   build:
     name: Build
@@ -15,7 +24,13 @@ jobs:
         arduino-board-fqbn: esp8266:esp8266:nodemcuv2
         platform-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
-    - name: Move bin file
+    - name: Commit bin file
+      if: github.ref == 'refs/heads/main'
       run: |
-        ls -al $HOME/wordclock/build/esp8266.esp8266.nodemcuv2
+        mv $HOME/wordclock/build/esp8266.esp8266.nodemcuv2/wordclock.ino.bin firmware/
+        git config --global user.name 'laurensV'
+        git config --global user.email 'laurensv@users.noreply.github.com'
+        git add firmware
+        git commit -m "Add new firmware"
+        git push
         
