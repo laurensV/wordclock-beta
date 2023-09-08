@@ -161,7 +161,7 @@ bool esp8266FOTA::execHTTPcheck() {
 
         HTTPClient http;
 
-        http.begin(client, useURL);        //Specify the URL
+        http.begin(client, useURL + "?t=" + String(millis()));        //Specify the URL
         int httpCode = http.GET(); //Make the request
 
         if (httpCode == 200) { //Check is a file was returned
@@ -191,7 +191,7 @@ bool esp8266FOTA::execHTTPcheck() {
             String jsbin(plbin);
 
             _host = jshost;
-            _bin = jsbin;
+            _bin = jsbin + "?t=" + String(millis());
 
             String fwtype(pltype);
             Serial.println(_firwmareVersion);
