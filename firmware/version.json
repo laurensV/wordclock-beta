@@ -1,6 +1,6 @@
 {
   "type": "wordclock",
-  "version": 9,
+  "version": 10,
   "host": "raw.githubusercontent.com",
   "port": 443,
   "bin": "/laurensV/wordclock/main/firmware/wordclock.ino.bin"
