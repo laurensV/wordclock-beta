@@ -134,10 +134,9 @@ void loop() {
     String timeString = timeToString(hours, minutes);
     log(timeString);
     showTimeString(timeString);
-
+    checkWifiDisconnect();
   }
   if (checkWifiInterval()) {
-    checkWifiDisconnect();
     if (isWifiConnected()) {
       log('checking for new updates..');
       FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
@@ -189,7 +188,7 @@ void showTimeString(String timeString) {
         for (int i = 0; i < word.length(); i++) {
           int x = (positionOfWord + i) % CLOCK_WIDTH;
           int y = (positionOfWord + i) / CLOCK_WIDTH;
-          matrix.drawPixel(x, y, matrix.Color(255, 0, 255));
+          matrix.drawPixel(x, y, matrix.Color(255, 255, 255));
         }
         lastLetterClock = positionOfWord + word.length();
       } else {
