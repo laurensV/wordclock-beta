@@ -17,6 +17,13 @@ String esp8266FOTA::getHeaderValue(String header, String headerName) {
     return header.substring(strlen(headerName.c_str()));
 }
 
+void esp8266FOTA::onProgress(THandlerFunction_Progress fn) {
+    Update.onProgress(fn);
+}
+void esp8266FOTA::onEnd(THandlerFunction fn) {
+    _end_callback = fn;
+}
+
 // OTA Logic
 void esp8266FOTA::execOTA() {
 
@@ -118,6 +125,9 @@ void esp8266FOTA::execOTA() {
             if (Update.end()) {
                 Serial.println("OTA done!");
                 if (Update.isFinished()) {
+                    if (_end_callback) {
+                        _end_callback();
+                    }
                     Serial.println("Update successfully completed. Rebooting.");
                     ESP.restart();
                 } else {
@@ -140,14 +150,11 @@ void esp8266FOTA::execOTA() {
 }
 
 bool esp8266FOTA::execHTTPcheck() {
-
     String useURL;
-
     if (useDeviceID) {
-        // String deviceID = getDeviceID() ;
         useURL = checkURL + "?id=" + getDeviceID();
     } else {
-        useURL = checkURL + "?t=" + String(millis());
+        useURL = checkURL;
     }
 
     WiFiClientSecure client;
@@ -191,7 +198,7 @@ bool esp8266FOTA::execHTTPcheck() {
             String jsbin(plbin);
 
             _host = jshost;
-            _bin = jsbin + "?t=" + String(millis());
+            _bin = jsbin;
 
             String fwtype(pltype);
             Serial.println(_firwmareVersion);

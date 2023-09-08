@@ -13,6 +13,7 @@
 #include <Adafruit_GFX.h> // https://github.com/adafruit/Adafruit_GFX
 #include <Adafruit_NeoMatrix.h> // https://github.com/adafruit/Adafruit_NeoMatrix
 #include <WiFiClientSecure.h>
+#include <ArduinoOTA.h>
 
 // own services
 #include "src/udplogger.h"
@@ -64,7 +65,7 @@ int VERSION = {
 };
 
 
-long lastReadTime = 0, lastWifiCheck = 0;
+long lastReadTimeTimer = 0, lastUpdateTimer = 0;
 
 WiFiManager wifiManager;
 
@@ -136,10 +137,9 @@ void loop() {
     showTimeString(timeString);
     checkWifiDisconnect();
   }
-  if (checkWifiInterval()) {
+  if (checkUpdateInterval()) {
     if (isWifiConnected()) {
       log('checking for new updates..');
-      FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
       bool updatedNeeded = FOTA.execHTTPcheck();
       if (updatedNeeded) {
         log('New update available!');
@@ -228,14 +228,14 @@ String split(String s, char parser, int index) {
 }
 
 bool readTimeInterval() {
-  bool interval = millis() - lastReadTime > PERIOD_READTIME;
-  if (interval) lastReadTime = millis();
+  bool interval = millis() - lastReadTimeTimer > PERIOD_READTIME;
+  if (interval) lastReadTimeTimer = millis();
   return interval;
 }
 
-bool checkWifiInterval() {
-  bool interval = millis() - lastWifiCheck > PERIOD_WIFICHECK;
-  if (interval) lastWifiCheck = millis();
+bool checkUpdateInterval() {
+  bool interval = millis() - lastUpdateTimer > PERIOD_WIFICHECK;
+  if (interval) lastUpdateTimer = millis();
   return interval;
 }
 
@@ -296,9 +296,32 @@ void onWifiConnect() {
   configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
 
+void onUpdateProgress(unsigned int progress, unsigned int total) {
+  log("Progress: " + String(progress / (total / 100)));
+  matrix.clear();
+  for (int i = 0; i < progress / (total / NUM_PIXELS); i++) {
+    int row = i / CLOCK_WIDTH;
+    matrix.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, matrix.Color(0, 255, 0));
+  }
+  matrix.show();
+}
+void onUpdateFinished() {
+  matrix.clear();
+  for (int i = 0; i < NUM_PIXELS; i++) {
+    matrix.setPixelColor(i, Adafruit_NeoMatrix::ColorHSV(21500, 255, 255));
+  }
+  matrix.show();
+  delay(200);
+}
+
 void setupOTA() {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
+  FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
+  FOTA.onProgress(onUpdateProgress);
+  FOTA.onEnd(onUpdateFinished);
+  ArduinoOTA.onProgress(onUpdateProgress);
+  ArduinoOTA.onEnd(onUpdateFinished);
 }
 
 void setupTime() {
