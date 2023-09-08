@@ -15,7 +15,7 @@
 #include <WiFiClientSecure.h>
 
 // own services
-#include "udplogger.h"
+#include "src/udplogger.h"
 #include "src/esp8266fota.h"
 
 // ----------------------------------------------------------------------------------
