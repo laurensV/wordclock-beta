@@ -27,7 +27,7 @@ jobs:
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
     - name: Update version
       if: github.ref == 'refs/heads/main'
-      run: echo "`jq --argjson version $(cat VERSION) '.version=$version' firmware/version.json`" > firmware/version.json
+      run: echo "`jq --argjson version $(cat VERSION.h) '.version=$version' firmware/version.json`" > firmware/version.json
     - name: Commit new firmware version
       if: github.ref == 'refs/heads/main'
       run: |

@@ -59,10 +59,11 @@ ELFLNUURDUS**";
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
-// int VERSION = {
-// #include "VERSION"
-// };
-int VERSION = 3;
+int VERSION = {
+#include "VERSION.h"  
+};
+
+
 long lastReadTime = 0, lastWifiCheck = 0;
 
 WiFiManager wifiManager;
@@ -84,9 +85,9 @@ Adafruit_NeoMatrix matrix(CLOCK_WIDTH, CLOCK_HEIGHT, NEOPIXEL_PIN,
 
 void setup() {
   Serial.begin(115200);
-  delay(100);
+  delay(1000);
   Serial.printf("\nSketchname: %s\nBuild: %s\n", (__FILE__), (__TIMESTAMP__));
-
+  Serial.print("Version: "); Serial.println(VERSION);
   //Init EEPROM
   EEPROM.begin(EEPROM_SIZE);
 
