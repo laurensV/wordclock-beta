@@ -25,7 +25,14 @@ jobs:
         arduino-board-fqbn: esp8266:esp8266:nodemcuv2
         platform-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
-    - name: Commit bin file
+    - name: Update version
+      if: github.ref == 'refs/heads/main'
+      uses: jossef/action-set-json-field@v2.1
+      with:
+        file: firmware/version.json
+        field: version
+        value: $(cat VERSION)
+    - name: Commit new firmware version
       if: github.ref == 'refs/heads/main'
       run: |
         mv $HOME/wordclock/build/esp8266.esp8266.nodemcuv2/wordclock.ino.bin firmware/

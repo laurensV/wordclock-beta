@@ -27,7 +27,6 @@
 #define AP_SSID "JouwWoordklok"
 #define HOSTNAME "jouwwoordklok"
 #define TIMEZONE TZ_Europe_Amsterdam
-#define VERSION 1
 
 #define EEPROM_SIZE 4      // size of EEPROM to save persistent variables
 #define ADR_RTC 0
@@ -60,6 +59,10 @@ ELFLNUURDUS**";
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
+int VERSION = {
+#include "./VERSION"
+};
+
 long lastReadTime = 0, lastWifiCheck = 0;
 
 WiFiManager wifiManager;
