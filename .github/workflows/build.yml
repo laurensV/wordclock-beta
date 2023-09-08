@@ -27,14 +27,11 @@ jobs:
         required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
     - name: Read VERSION file
       id: getversion
+      if: github.ref == 'refs/heads/main'
       run: echo "::set-output name=version::$(cat VERSION)"
     - name: Update version
       if: github.ref == 'refs/heads/main'
-      uses: jossef/action-set-json-field@v2.1
-      with:
-        file: firmware/version.json
-        field: version
-        value: ${{ steps.getversion.outputs.version }}
+      run: echo "`jq '.version=${{ steps.getversion.outputs.version }}' firmware/version.json`" > firmware.version.json
     - name: Commit new firmware version
       if: github.ref == 'refs/heads/main'
       run: |
