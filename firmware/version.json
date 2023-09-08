@@ -1,6 +1,6 @@
 {
   "type": "wordclock",
-  "version": 11,
+  "version": 1,
   "host": "raw.githubusercontent.com",
   "port": 443,
   "test": "test",
