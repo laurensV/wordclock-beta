@@ -147,7 +147,7 @@ bool esp8266FOTA::execHTTPcheck() {
         // String deviceID = getDeviceID() ;
         useURL = checkURL + "?id=" + getDeviceID();
     } else {
-        useURL = checkURL;
+        useURL = checkURL + "?t=" + String(millis());
     }
 
     WiFiClientSecure client;
@@ -161,7 +161,7 @@ bool esp8266FOTA::execHTTPcheck() {
 
         HTTPClient http;
 
-        http.begin(client, useURL + "?t=" + String(millis()));        //Specify the URL
+        http.begin(client, useURL);        //Specify the URL
         int httpCode = http.GET(); //Make the request
 
         if (httpCode == 200) { //Check is a file was returned
