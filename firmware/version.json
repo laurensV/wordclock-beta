@@ -3,5 +3,6 @@
   "version": 11,
   "host": "raw.githubusercontent.com",
   "port": 443,
+  "test": "test",
   "bin": "/laurensV/wordclock/main/firmware/wordclock.ino.bin"
 }
