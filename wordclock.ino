@@ -60,7 +60,7 @@ ELFLNUURDUS**";
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
 int VERSION = {
-#include "./VERSION"
+#include "VERSION"
 };
 
 long lastReadTime = 0, lastWifiCheck = 0;
