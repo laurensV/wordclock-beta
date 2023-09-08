@@ -15,7 +15,7 @@
 #include <WiFiClientSecure.h>
 
 // own services
-#include "src/udplogger.h"
+#include "udplogger.h"
 #include "src/esp8266fota.h"
 
 // ----------------------------------------------------------------------------------
@@ -59,10 +59,10 @@ ELFLNUURDUS**";
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
-int VERSION = {
-#include "VERSION"
-};
-
+// int VERSION = {
+// #include "VERSION"
+// };
+int VERSION = 3;
 long lastReadTime = 0, lastWifiCheck = 0;
 
 WiFiManager wifiManager;
