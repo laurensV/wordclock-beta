@@ -31,7 +31,7 @@ jobs:
       with:
         file: firmware/version.json
         field: version
-        value: ${{cat VERSION}}
+        value: ${{$(cat VERSION)}}
     - name: Commit new firmware version
       if: github.ref == 'refs/heads/main'
       run: |
