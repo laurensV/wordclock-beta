@@ -189,7 +189,7 @@ void showTimeString(String timeString) {
         for (int i = 0; i < word.length(); i++) {
           int x = (positionOfWord + i) % CLOCK_WIDTH;
           int y = (positionOfWord + i) / CLOCK_WIDTH;
-          matrix.drawPixel(x, y, matrix.Color(255, 255, 255));
+          matrix.drawPixel(x, y, matrix.Color(255, 0, 255));
         }
         lastLetterClock = positionOfWord + word.length();
       } else {
