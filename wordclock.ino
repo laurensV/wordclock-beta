@@ -28,6 +28,7 @@
 #define AP_SSID "JouwWoordklok"
 #define HOSTNAME "jouwwoordklok"
 #define TIMEZONE TZ_Europe_Amsterdam
+#define AUTO_UPDATE true
 
 #define EEPROM_SIZE 4      // size of EEPROM to save persistent variables
 #define ADR_RTC 0
@@ -137,7 +138,7 @@ void loop() {
     showTimeString(timeString);
     checkWifiDisconnect();
   }
-  if (checkUpdateInterval()) {
+  if (checkUpdateInterval() && AUTO_UPDATE) {
     if (isWifiConnected()) {
       log('checking for new updates..');
       bool updatedNeeded = FOTA.execHTTPcheck();
@@ -188,7 +189,7 @@ void showTimeString(String timeString) {
         for (int i = 0; i < word.length(); i++) {
           int x = (positionOfWord + i) % CLOCK_WIDTH;
           int y = (positionOfWord + i) / CLOCK_WIDTH;
-          matrix.drawPixel(x, y, matrix.Color(70, 55, 30));
+          matrix.drawPixel(x, y, matrix.Color(255, 255, 255));
         }
         lastLetterClock = positionOfWord + word.length();
       } else {
@@ -301,14 +302,14 @@ void onUpdateProgress(unsigned int progress, unsigned int total) {
   matrix.clear();
   for (int i = 0; i < progress / (total / NUM_PIXELS); i++) {
     int row = i / CLOCK_WIDTH;
-    matrix.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, matrix.Color(0, 255, 0));
+    matrix.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, 0, 0, 255);
   }
   matrix.show();
 }
 void onUpdateFinished() {
   matrix.clear();
   for (int i = 0; i < NUM_PIXELS; i++) {
-    matrix.setPixelColor(i, Adafruit_NeoMatrix::ColorHSV(21500, 255, 255));
+    matrix.setPixelColor(i, 0, 255, 0);
   }
   matrix.show();
   delay(200);
