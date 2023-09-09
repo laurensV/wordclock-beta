@@ -10,76 +10,28 @@
 #include <DS3231.h> // https://github.com/NorthernWidget/DS3231
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <Adafruit_NeoPixel.h> // https://github.com/adafruit/Adafruit_NeoPixel
-#include <Adafruit_GFX.h> // https://github.com/adafruit/Adafruit_GFX
-#include <Adafruit_NeoMatrix.h> // https://github.com/adafruit/Adafruit_NeoMatrix
-#include <WiFiClientSecure.h>
 #include <ArduinoOTA.h>
 
 // own services
+#include "wordclock.h"
 #include "src/udplogger.h"
 #include "src/esp8266fota.h"
+#include "src/ledmatrix.h"
 
-// ----------------------------------------------------------------------------------
-//                                        CONSTANTS
-// ----------------------------------------------------------------------------------
-#define PERIOD_READTIME 1000UL
-#define PERIOD_WIFICHECK 20000UL
-#define PERIOD_NTP_UPDATE 60 * 1000UL
-#define AP_SSID "JouwWoordklok"
-#define HOSTNAME "jouwwoordklok"
-#define TIMEZONE TZ_Europe_Amsterdam
-#define AUTO_UPDATE true
-
-#define EEPROM_SIZE 4      // size of EEPROM to save persistent variables
-#define ADR_RTC 0
-
-#define CLOCK_WIDTH 13
-#define CLOCK_HEIGHT 13
-#define NUM_PIXELS (CLOCK_WIDTH * CLOCK_HEIGHT)
-
-#define NEOPIXEL_PIN 0       // pin to which the NeoPixels are attached
-
-
-// ----------------------------------------------------------------------------------
-//                               WORDCLOCK LAYOUT
-// ----------------------------------------------------------------------------------
-const String letters = "\
-HETVISNEENZES\
-TWEEDRIEZVIER\
-VIJFZEVENACHT\
-NEGEN-TIENELF\
-TWAALFDERTIEN\
-VEERTIENKWART\
-VOOROVERTHALF\
-EENXTWEENDRIE\
-VIERGVIJFNZES\
-KLZEVENMACHTR\
-FNEGENSTIENEE\
-TWAALFITOTV**\
-ELFLNUURDUS**";
+uint8_t VERSION = {
+#include "VERSION.h"  
+};
 
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
-int VERSION = {
-#include "VERSION.h"  
-};
-
-
-long lastReadTimeTimer = 0, lastUpdateTimer = 0;
-
+long lastReadTime = 0, lastCheckUpdate = 0;
 WiFiManager wifiManager;
-
 UDPLogger logger;
-
 DS3231 rtc;
-
 esp8266FOTA FOTA("wordclock", VERSION);
-
-Adafruit_NeoMatrix matrix(CLOCK_WIDTH, CLOCK_HEIGHT, NEOPIXEL_PIN,
-  NEO_MATRIX_TOP + NEO_MATRIX_LEFT +
-  NEO_MATRIX_ROWS + NEO_MATRIX_ZIGZAG,
-  NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels(NUM_PIXELS, NEOPIXEL_PIN);
+LEDMatrix matrix(&pixels);
 
 // ----------------------------------------------------------------------------------
 //                                        SETUP
@@ -99,20 +51,20 @@ void setup() {
 
   setupTime();
 
-  matrix.begin();
-  matrix.clear();
+  pixels.begin();
+  pixels.clear();
   for (int i = 0; i < NUM_PIXELS; i++) {
     uint16_t hue = 0 + (i * 65536) / NUM_PIXELS;
-    uint32_t color = Adafruit_NeoMatrix::ColorHSV(hue, 255, 255);
-    color = matrix.gamma32(color);
-    matrix.setPixelColor(i, color);
-    matrix.show();
+    uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
+    color = pixels.gamma32(color);
+    pixels.setPixelColor(i, color);
+    pixels.show();
     delay(20);
   }
 
   setupWifiManager();
   if (wifiManager.autoConnect(AP_SSID)) {
-    log("Reonnected to WiFi");
+    print("Reonnected to WiFi");
     onWifiConnect();
   }
 }
@@ -132,21 +84,21 @@ void loop() {
     timeInfo = localtime(&timeNowUTC);
     int hours = timeInfo->tm_hour;
     int minutes = timeInfo->tm_min;
-    log(String(hours) + ":" + String(minutes));
+    print(String(hours) + ":" + String(minutes) + " - ", false);
     String timeString = timeToString(hours, minutes);
-    log(timeString);
+    print(timeString);
     showTimeString(timeString);
     checkWifiDisconnect();
   }
   if (checkUpdateInterval() && AUTO_UPDATE) {
     if (isWifiConnected()) {
-      log('checking for new updates..');
+      print("checking for new updates..");
       bool updatedNeeded = FOTA.execHTTPcheck();
       if (updatedNeeded) {
-        log('New update available!');
+        print("New update available!");
         FOTA.execOTA();
       } else {
-        log('Already running latest version');
+        print("Already running latest version");
       }
     }
   }
@@ -155,11 +107,13 @@ void loop() {
 // ----------------------------------------------------------------------------------
 //                                        OTHER FUNCTIONS
 // ----------------------------------------------------------------------------------
-void log(String logmessage) {
-  logger.log(logmessage);
-}
-void log(uint32_t color) {
-  logger.log(color);
+void print(String message, bool newline) {
+  if (newline) {
+    Serial.println(message);
+  } else {
+    Serial.print(message);
+  }
+  logger.log(message);
 }
 
 void showTimeString(String timeString) {
@@ -173,7 +127,6 @@ void showTimeString(String timeString) {
   // add space on the end of timeString for splitting
   timeString = timeString + " ";
 
-  // empty the targetgrid
   matrix.clear();
 
   while (true) {
@@ -187,21 +140,28 @@ void showTimeString(String timeString) {
       if (positionOfWord >= 0) {
         // word found on clock
         for (int i = 0; i < word.length(); i++) {
-          int x = (positionOfWord + i) % CLOCK_WIDTH;
-          int y = (positionOfWord + i) / CLOCK_WIDTH;
-          matrix.drawPixel(x, y, matrix.Color(255, 255, 255));
+          int row = (positionOfWord + i) / CLOCK_WIDTH;
+          int col = (positionOfWord + i) % CLOCK_WIDTH;
+          matrix.setPixelType(row, col, LEDMatrix::TIME);
         }
         lastLetterClock = positionOfWord + word.length();
       } else {
         // word is not possible to show on clock
-        log("word is not possible to show on clock: " + String(word));
+        print("word is not possible to show on clock: " + String(word));
       }
     } else {
       // end - no more word in message
       break;
     }
   }
-  matrix.show();
+  for (int i = 0; i < letters.length(); i++) {
+    if (letters.charAt(i) == '*') {
+      int row = i / CLOCK_WIDTH;
+      int col = i % CLOCK_WIDTH;
+      matrix.setPixelType(row, col, LEDMatrix::NAME);
+    }
+  }
+  matrix.draw();
 }
 
 /**
@@ -229,14 +189,14 @@ String split(String s, char parser, int index) {
 }
 
 bool readTimeInterval() {
-  bool interval = millis() - lastReadTimeTimer > PERIOD_READTIME;
-  if (interval) lastReadTimeTimer = millis();
+  bool interval = millis() - lastReadTime > PERIOD_READTIME;
+  if (interval) lastReadTime = millis();
   return interval;
 }
 
 bool checkUpdateInterval() {
-  bool interval = millis() - lastUpdateTimer > PERIOD_WIFICHECK;
-  if (interval) lastUpdateTimer = millis();
+  bool interval = millis() - lastCheckUpdate > PERIOD_CHECK_UPDATE;
+  if (interval) lastCheckUpdate = millis();
   return interval;
 }
 
@@ -247,21 +207,21 @@ bool isWifiConnected() {
 void checkWifiDisconnect() {
   if (!wifiManager.getConfigPortalActive()) {
     if (WiFi.status() != WL_CONNECTED) {
-      log("no wifi connection..");
-      matrix.drawPixel(3, 7, matrix.Color(255, 0, 0));
-      matrix.show();
+      print("no wifi connection..");
+      pixels.setPixelColor(100, pixels.Color(255, 0, 0, 0));
+      pixels.show();
     } else if (WiFi.localIP().toString() == "0.0.0.0") {
       // detected bug: ESP8266 - WiFi status not changing
       // https://github.com/esp8266/Arduino/issues/2593#issuecomment-323801447
-      log("no IP address, reconnecting WiFi..");
+      print("no IP address, reconnecting WiFi..");
       WiFi.reconnect();
     }
   }
 }
 
 void printIP() {
-  log("IP address: ");
-  log(WiFi.localIP().toString());
+  print("IP address: ");
+  print(WiFi.localIP().toString());
   uint8_t address = WiFi.localIP()[3];
   // ledmatrix.printChar(1, 0, 'I', maincolor_clock);
   // ledmatrix.printChar(5, 0, 'P', maincolor_clock);
@@ -274,13 +234,13 @@ void printIP() {
   // delay(3000); // change to freeze matrix delay timer
 }
 void configModeCallback(WiFiManager* wm) {
-  log("Entered AP config mode");
-  log(WiFi.softAPIP().toString());
+  print("Entered AP config mode");
+  print(WiFi.softAPIP().toString());
 
-  log(wm->getConfigPortalSSID());
+  print(wm->getConfigPortalSSID());
 }
 void saveConfigCallback() {
-  log("Saved and connected to WiFi.");
+  print("Saved and connected to WiFi.");
   onWifiConnect();
 }
 void setupWifiManager() {
@@ -298,20 +258,20 @@ void onWifiConnect() {
 }
 
 void onUpdateProgress(unsigned int progress, unsigned int total) {
-  log("Progress: " + String(progress / (total / 100)));
-  matrix.clear();
+  print("Progress: " + String(progress / (total / 100)));
+  pixels.clear();
   for (int i = 0; i < progress / (total / NUM_PIXELS); i++) {
     int row = i / CLOCK_WIDTH;
-    matrix.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, 0, 0, 255);
+    pixels.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, pixels.Color(0, 0, 255));
   }
-  matrix.show();
+  pixels.show();
 }
 void onUpdateFinished() {
-  matrix.clear();
+  pixels.clear();
   for (int i = 0; i < NUM_PIXELS; i++) {
-    matrix.setPixelColor(i, 0, 255, 0);
+    pixels.setPixelColor(i, pixels.Color(0, 255, 0));
   }
-  matrix.show();
+  pixels.show();
   delay(200);
 }
 
@@ -332,10 +292,10 @@ void setupTime() {
   Wire.begin();
   rtc.setClockMode(false);
   if ((readIntEEPROM(ADR_RTC) && rtc.getYear())) {
-    log("RTC already set, skipping set time");
+    print("RTC already set, skipping set time");
   } else {
     if (readIntEEPROM(ADR_RTC)) {
-      log("WARNING: RTC lost power. Compile again or connect the WiFi to sync the time");
+      print("WARNING: RTC lost power. Compile again or connect the WiFi to sync the time");
     }
     DateTime compiled = DateTime(__DATE__, __TIME__);
     time_t local_compile = compiled.unixtime();
@@ -343,7 +303,7 @@ void setupTime() {
     tmptime = localtime(&local_compile);
     tmptime->tm_isdst = 0;
     int32_t offset = mktime(tmptime) - mktime(gmtime(&local_compile));
-    log("setting RTC to compile UTC time + 33 seconds");
+    print("setting RTC to compile UTC time + 33 seconds");
     rtc.setEpoch(local_compile - offset + 33);
     writeIntEEPROM(ADR_RTC, 1);
   }
@@ -356,10 +316,10 @@ void setupTime() {
 }
 
 void reset() {
-  log("resetting WiFi settings");
+  print("resetting WiFi settings");
   wifiManager.resetSettings();
 
-  log("empty entire EEPROM");
+  print("empty entire EEPROM");
   for (int i = 0; i < EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
@@ -426,11 +386,11 @@ String timeToString(uint8_t hours, uint8_t minutes) {
 // NTP functions
 void time_set(bool from_sntp) {
   if (from_sntp) {
-    log("System time updated from NTP server");
+    print("System time updated from NTP server");
     // Update RTC if time came from NTP server
     rtc.setEpoch(time(nullptr));
   } else {
-    log("System time updated from RTC");
+    print("System time updated from RTC");
   }
 }
 uint32_t sntp_update_delay_MS_rfc_not_less_than_15000() {

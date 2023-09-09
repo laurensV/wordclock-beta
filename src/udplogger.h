@@ -10,7 +10,6 @@ public:
     UDPLogger();
     UDPLogger(IPAddress interfaceAddr, IPAddress multicastAddr, int port);
     void log(String logmessage);
-    void log(uint32_t color);
 private:
     IPAddress _multicastAddr;
     IPAddress _interfaceAddr;
