@@ -16,8 +16,6 @@ http://arduino.esp8266.com/stable/package_esp8266com_index.json
 * WiFiManager: https://github.com/tzapu/WiFiManager
 * DS3231: https://github.com/NorthernWidget/DS3231
 * Adafruit NeoPixel: https://github.com/adafruit/Adafruit_NeoPixel
-* Adafruit NeoMatrix: https://github.com/adafruit/Adafruit_NeoMatrix
-* Adafruit GFX: https://github.com/adafruit/Adafruit_GFX
 
 ### Logger
 After establishing WiFi connection, you can also see the logs in your local network with the following python script:

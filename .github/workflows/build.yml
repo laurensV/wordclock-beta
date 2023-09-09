@@ -24,7 +24,7 @@ jobs:
       with:
         arduino-board-fqbn: esp8266:esp8266:nodemcuv2
         platform-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
-        required-libraries: ArduinoJson,Adafruit NeoPixel,Adafruit NeoMatrix,DS3231,WiFiManager,Adafruit GFX Library
+        required-libraries: ArduinoJson,Adafruit NeoPixel,DS3231,WiFiManager
     - name: Update version
       if: github.ref == 'refs/heads/main'
       run: echo "`jq --argjson version $(cat VERSION.h) '.version=$version' firmware/version.json`" > firmware/version.json
