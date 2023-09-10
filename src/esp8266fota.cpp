@@ -1,10 +1,8 @@
 #include "esp8266fota.h"
-#include "Arduino.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include "ArduinoJson.h"
-//#include <Update.h>
 
 esp8266FOTA::esp8266FOTA(String firwmareType, int firwmareVersion) {
     _firwmareType = firwmareType;
@@ -26,18 +24,17 @@ void esp8266FOTA::onEnd(THandlerFunction fn) {
 
 // OTA Logic
 void esp8266FOTA::execOTA() {
-
     WiFiClientSecure client;
     client.setInsecure();
     int contentLength = 0;
     bool isValidContentType = false;
 
-    Serial.println("Connecting to: " + String(_host));
+    print("Connecting to: " + String(_host));
     // Connect to Webserver
     if (client.connect(_host.c_str(), _port)) {
         // Connection Succeed.
         // Fecthing the bin
-        Serial.println("Fetching Bin: " + String(_bin));
+        print("Fetching Bin: " + String(_bin));
 
         // Get the contents of the bin file
         client.print(String("GET ") + _bin + " HTTP/1.1\r\n" +
@@ -48,7 +45,7 @@ void esp8266FOTA::execOTA() {
         unsigned long timeout = millis();
         while (client.available() == 0) {
             if (millis() - timeout > 5000) {
-                Serial.println("Client Timeout !");
+                print("Client Timeout !");
                 client.stop();
                 return;
             }
@@ -69,7 +66,7 @@ void esp8266FOTA::execOTA() {
             // else break and Exit Update
             if (line.startsWith("HTTP/1.1")) {
                 if (line.indexOf("200") < 0) {
-                    Serial.println("Got a non 200 status code from server. Exiting OTA Update.");
+                    print("Got a non 200 status code from server. Exiting OTA Update.");
                     break;
                 }
             }
@@ -78,13 +75,13 @@ void esp8266FOTA::execOTA() {
             // Start with content length
             if (line.startsWith("Content-Length: ")) {
                 contentLength = atoi((getHeaderValue(line, "Content-Length: ")).c_str());
-                Serial.println("Got " + String(contentLength) + " bytes from server");
+                print("Got " + String(contentLength) + " bytes from server");
             }
 
             // Next, the content type
             if (line.startsWith("Content-Type: ")) {
                 String contentType = getHeaderValue(line, "Content-Type: ");
-                Serial.println("Got " + contentType + " payload.");
+                print("Got " + contentType + " payload.");
                 if (contentType == "application/octet-stream") {
                     isValidContentType = true;
                 }
@@ -92,15 +89,11 @@ void esp8266FOTA::execOTA() {
         }
     } else {
         // Connect to webserver failed
-        // May be try?
-        // Probably a choppy network?
-        Serial.println("Connection to " + String(_host) + " failed. Please check your setup");
-        // retry??
-        // execOTA();
+        print("Connection to " + String(_host) + " failed. Please check your setup");
     }
 
     // Check what is the contentLength and if content type is `application/octet-stream`
-    Serial.println("contentLength : " + String(contentLength) + ", isValidContentType : " + String(isValidContentType));
+    print("contentLength : " + String(contentLength) + ", isValidContentType : " + String(isValidContentType));
 
     // check contentLength and content type
     if (contentLength && isValidContentType) {
@@ -109,42 +102,40 @@ void esp8266FOTA::execOTA() {
 
         // If yes, begin
         if (canBegin) {
-            Serial.println("Begin OTA. This may take 2 - 5 mins to complete. Things might be quite for a while.. Patience!");
+            print("Begin OTA Update, this may take a couple of minutes..");
             // No activity would appear on the Serial monitor
             // So be patient. This may take 2 - 5mins to complete
             size_t written = Update.writeStream(client);
 
             if (written == contentLength) {
-                Serial.println("Written : " + String(written) + " successfully");
+                print("Written : " + String(written) + " successfully");
             } else {
-                Serial.println("Written only : " + String(written) + "/" + String(contentLength) + ". Retry?");
-                // retry??
-                // execOTA();
+                print("Written only : " + String(written) + "/" + String(contentLength));
             }
 
             if (Update.end()) {
-                Serial.println("OTA done!");
+                print("OTA done!");
                 if (Update.isFinished()) {
                     if (_end_callback) {
                         _end_callback();
                     }
-                    Serial.println("Update successfully completed. Rebooting.");
+                    print("Update successfully completed. Rebooting.");
                     ESP.restart();
                 } else {
-                    Serial.println("Update not finished? Something went wrong!");
+                    print("Update not finished? Something went wrong!");
                 }
             } else {
-                Serial.println("Error Occurred. Error #: " + String(Update.getError()));
+                print("Error Occurred. Error #: " + String(Update.getError()));
             }
         } else {
             // not enough space to begin OTA
             // Understand the partitions and
             // space availability
-            Serial.println("Not enough space to begin OTA");
+            print("Not enough space to begin OTA");
             client.flush();
         }
     } else {
-        Serial.println("There was no content in the response");
+        print("There was no content in the response");
         client.flush();
     }
 }
@@ -161,9 +152,9 @@ bool esp8266FOTA::execHTTPcheck() {
     client.setInsecure();
     _port = 443;
 
-    Serial.println("Getting HTTP");
-    Serial.println(useURL);
-    Serial.println("------");
+    print("Getting HTTP");
+    print(useURL);
+    print("------");
     if ((WiFi.status() == WL_CONNECTED)) { //Check the current connection status
 
         HTTPClient http;
@@ -183,8 +174,7 @@ bool esp8266FOTA::execHTTPcheck() {
             DeserializationError err = deserializeJson(JSONDocument, JSONMessage);
 
             if (err) { //Check for errors in parsing
-                Serial.println("Parsing failed");
-                delay(5000);
+                print("Parsing failed");
                 return false;
             }
 
@@ -201,7 +191,8 @@ bool esp8266FOTA::execHTTPcheck() {
             _bin = jsbin;
 
             String fwtype(pltype);
-            Serial.println(_firwmareVersion);
+            print(_firwmareVersion);
+            print(plversion);
             Serial.println(plversion);
             if (plversion > _firwmareVersion && fwtype == _firwmareType) {
                 return true;
@@ -209,7 +200,7 @@ bool esp8266FOTA::execHTTPcheck() {
                 return false;
             }
         } else {
-            Serial.println("Error on HTTP request");
+            print("Error on HTTP request");
             return false;
         }
 

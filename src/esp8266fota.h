@@ -2,6 +2,7 @@
 #define esp8266fota_h
 
 #include "Arduino.h"
+#include "../wordclock.h"
 
 class esp8266FOTA {
 public:

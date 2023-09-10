@@ -2,7 +2,7 @@
 #define wordclock_h
 
 // ----------------------------------------------------------------------------------
-//                                        CONSTANTS
+//                                   CONSTANTS
 // ----------------------------------------------------------------------------------
 #define PERIOD_READTIME 1000
 #define PERIOD_CHECK_UPDATE 60000
@@ -21,8 +21,11 @@
 
 #define NEOPIXEL_PIN 0 // pin to which the NeoPixels are attached
 
-
+// ----------------------------------------------------------------------------------
+//                                  FUNCTIONS
+// ----------------------------------------------------------------------------------
 void print(String message, bool newline = true);
+void print(int number, bool newline = true);
 
 // ----------------------------------------------------------------------------------
 //                               WORDCLOCK LAYOUT

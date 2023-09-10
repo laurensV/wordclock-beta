@@ -49,24 +49,18 @@ void LEDMatrix::draw() {
           color = BLACK;
           break;
         case TIME:
-          color = BLUE;
+          color = WHITE;
           break;
         case NAME:
-          color = RED;
-          break;
-        default:
           color = WHITE;
+          break;
+        case OTHER:
+          color = GREEN;
           break;
       }
       uint16_t n;
-      if (row % 2) {
-        // Odd row, right to left
-        n = row * CLOCK_WIDTH + (CLOCK_WIDTH - 1 - col);
-      } else {
-        // Even row, left to right
-        n = row * CLOCK_WIDTH + col;
-      }
-      (*pixels).setPixelColor(n, color);
+
+      (*pixels).setPixelColor(pixelIndex(row, col), color);
     }
   }
   (*pixels).show();
@@ -75,6 +69,28 @@ void LEDMatrix::draw() {
 /**
  * shows a byte buffer
  */
-void LEDMatrix::print(const byte* ledbuffer, uint8_t xpos, uint8_t ypos, uint8_t width, uint8_t height, enum LED_TYPE type) {
+void LEDMatrix::print(const byte* drawing, uint8_t xpos, uint8_t ypos, enum LED_TYPE type) {
+  for (int i = 0; i < FONT_HEIGHT; ++i) {
+    for (int j = 0; j < FONT_WIDTH; ++j) {
+      if (drawing[i] & 1 << j) {
+        setPixelType(i + ypos, FONT_WIDTH - j - 1 + xpos, type);
+      }
+    }
+  }
+  // for (int y = ypos, i = 0; y < (ypos + 5); y++, i++) {
+  //   for (int x = xpos, k = 2; x < (xpos + 3); x++, k--) {
+  //     if ((drawing[i] >> k) & 0x1) {
+  //       setPixelType(x, y, type);
+  //     }
+  //   }
+  // }
+}
 
+uint16_t LEDMatrix::pixelIndex(uint8_t row, uint8_t col) {
+  if (row % 2) {
+    // Odd row, right to left
+    return row * CLOCK_WIDTH + (CLOCK_WIDTH - 1 - col);
+  }
+  // Even row, left to right
+  return row * CLOCK_WIDTH + col;
 }

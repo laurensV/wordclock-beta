@@ -52,9 +52,10 @@ void setup() {
   setupTime();
 
   pixels.begin();
+  pixels.setBrightness(100);
   pixels.clear();
   for (int i = 0; i < NUM_PIXELS; i++) {
-    uint16_t hue = 0 + (i * 65536) / NUM_PIXELS;
+    uint16_t hue = (i * 65536) / NUM_PIXELS;
     uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
     color = pixels.gamma32(color);
     pixels.setPixelColor(i, color);
@@ -64,7 +65,7 @@ void setup() {
 
   setupWifiManager();
   if (wifiManager.autoConnect(AP_SSID)) {
-    print("Reonnected to WiFi");
+    print("Reconnected to WiFi");
     onWifiConnect();
   }
 }
@@ -114,6 +115,9 @@ void print(String message, bool newline) {
     Serial.print(message);
   }
   logger.log(message);
+}
+void print(int number, bool newline) {
+  print(String(number), newline);
 }
 
 void showTimeString(String timeString) {
@@ -188,14 +192,26 @@ String split(String s, char parser, int index) {
   return rs;
 }
 
+void pauseTimer(long* timer, unsigned long delay = 0) {
+  if (!delay) {
+    *timer = LONG_MAX; // infinite
+  } else {
+    *timer = millis() + delay;
+  }
+}
+
+void resumeTimer(long* timer) {
+  *timer = millis();
+}
+
 bool readTimeInterval() {
-  bool interval = millis() - lastReadTime > PERIOD_READTIME;
+  bool interval = (long)millis() - lastReadTime > PERIOD_READTIME;
   if (interval) lastReadTime = millis();
   return interval;
 }
 
 bool checkUpdateInterval() {
-  bool interval = millis() - lastCheckUpdate > PERIOD_CHECK_UPDATE;
+  bool interval = (long)millis() - lastCheckUpdate > PERIOD_CHECK_UPDATE;
   if (interval) lastCheckUpdate = millis();
   return interval;
 }
@@ -223,15 +239,21 @@ void printIP() {
   print("IP address: ");
   print(WiFi.localIP().toString());
   uint8_t address = WiFi.localIP()[3];
-  // ledmatrix.printChar(1, 0, 'I', maincolor_clock);
-  // ledmatrix.printChar(5, 0, 'P', maincolor_clock);
-  // if (address/100 != 0) {
-  //   ledmatrix.printNumber(0, 6, (address/100), maincolor_clock);
-  // }
-  // ledmatrix.printNumber(4, 6, (address/10)%10, maincolor_clock);
-  // ledmatrix.printNumber(8, 6, address%10, maincolor_clock);
-  // ledmatrix.drawOnMatrixInstant();
-  // delay(3000); // change to freeze matrix delay timer
+  pauseTimer(&lastReadTime, 10000);
+  matrix.clear();
+  matrix.print(FONT_I, 1, 0, LEDMatrix::OTHER);
+  matrix.print(FONT_P, 5, 0, LEDMatrix::OTHER);
+  uint8_t x = 0;
+  if (address / 100 != 0) {
+    matrix.print(FONT_NUMBERS[(address / 100)], x, 6, LEDMatrix::OTHER);
+    x += 4;
+  }
+  if ((address / 10) % 10 != 0) {
+    matrix.print(FONT_NUMBERS[(address / 10) % 10], x, 6, LEDMatrix::OTHER);
+    x += 4;
+  }
+  matrix.print(FONT_NUMBERS[address % 10], x, 6, LEDMatrix::OTHER);
+  matrix.draw();
 }
 void configModeCallback(WiFiManager* wm) {
   print("Entered AP config mode");
