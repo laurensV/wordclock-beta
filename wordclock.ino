@@ -5,6 +5,7 @@
 #include <time.h>
 #include <coredecls.h>
 #include <TZ.h>
+#include "LittleFS.h"
 
 // libraries from library manager
 #include <DS3231.h> // https://github.com/NorthernWidget/DS3231
