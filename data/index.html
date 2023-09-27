@@ -1,1 +1,126 @@
-hello wordclock!
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8">
+<title>JouwWoordklok</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="JouwWoordklok Control Panel">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+<style>
+  .IroColorPicker {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <section class="section">
+      <div class="container">
+        <div class="has-text-centered">
+          <img src="/img/logo.png" width="250" />
+        </div>
+        <div class="tabs is-centered is-medium">
+          <ul>
+            <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
+            <li :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam</a></li>
+          </ul>
+        </div>
+        <div id="picker" v-show="!loading" class="mt-6"></div>
+        <div v-show="loading">Loading..</div>
+      </div>
+    </section>
+  </div>
+  <script>
+    const { createApp, ref, onMounted, watch } = Vue;
+    function throttle(f, delay = 50) {
+      let lastCall = Number.NEGATIVE_INFINITY;
+      let wait;
+      let handle;
+      return (...args) => {
+        wait = lastCall + delay - Date.now();
+        clearTimeout(handle);
+          handle = setTimeout(() => {
+            f(...args);
+            lastCall = Date.now();
+          }, wait); 
+      };
+    }
+    let colorPicker;
+    let tabChange = false;
+
+    createApp({
+      setup() {
+        const colorType = ref('time');
+        const loading = ref(false);
+        // watch works directly on a ref
+        const getColor = async (type) => {
+          try {
+            loading.value = true;
+            const response = await fetch('./api/color?type='+type);
+            const color = '#' + (await response.json()).toString(16).padStart(6, '0');
+            if (!colorPicker) {
+              colorPicker = new window.iro.ColorPicker("#picker", {
+                  // Set the size of the color picker
+                  width: 320,
+                  // Set the initial color to pure red
+                  color: color,
+                  layout: [
+                    {
+                      component: iro.ui.Wheel,
+                    },
+                    // { 
+                    //   component: window.iro.ui.Slider,
+                    //   options: {
+                    //     // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
+                    //     sliderType: 'saturation'
+                    //   }
+                    // },
+                  ]
+                });
+                colorPicker.on('color:change', throttle(async function(color) {
+                  if (!tabChange) {
+                    try {
+                      const response = await fetch('./api/color?type='+colorType.value, {
+                        method: 'POST',
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(color.rgb)
+                      })
+                      const result = await response.json();
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  } else {
+                    tabChange = false;
+                  }
+      
+                }, 200));
+            } else {
+              tabChange = true;
+              colorPicker.color.set(color);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+          loading.value = false;
+        }
+        watch(colorType, async (newType) => {
+          getColor(newType);
+        })
+
+        onMounted(() => {
+          getColor(colorType.value);
+        })
+        return {
+          colorType
+        }
+      }
+    }).mount('#app')
+  </script>
+</body>
+</html>
+

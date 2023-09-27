@@ -182,7 +182,7 @@ bool esp8266FOTA::execHTTPcheck() {
             int plversion = JSONDocument["version"];
             const char* plhost = JSONDocument["host"];
             _port = JSONDocument["port"];
-            const char* plbin = JSONDocument["bin"];
+            const char* plbin = JSONDocument["firmware"];
 
             String jshost(plhost);
             String jsbin(plbin);

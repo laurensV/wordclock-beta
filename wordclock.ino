@@ -5,6 +5,7 @@
 #include <time.h>
 #include <coredecls.h>
 #include <TZ.h>
+#include <ESP8266WebServer.h>
 #include "LittleFS.h"
 
 // libraries from library manager
@@ -12,6 +13,7 @@
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <Adafruit_NeoPixel.h> // https://github.com/adafruit/Adafruit_NeoPixel
 #include <ArduinoOTA.h>
+#include "ArduinoJson.h"
 
 // own services
 #include "wordclock.h"
@@ -26,13 +28,15 @@ uint8_t VERSION = {
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
-long lastReadTime = 0, lastCheckUpdate = 0;
+long lastReadTime = 0, lastCheckUpdate = 0, lastStoreColors = 0;
+bool storeColorTime = false, storeColorName = false;
 WiFiManager wifiManager;
 UDPLogger logger;
 DS3231 rtc;
 esp8266FOTA FOTA("wordclock", VERSION);
 Adafruit_NeoPixel pixels(NUM_PIXELS, NEOPIXEL_PIN);
 LEDMatrix matrix(&pixels);
+ESP8266WebServer server(80);
 
 // ----------------------------------------------------------------------------------
 //                                        SETUP
@@ -49,6 +53,24 @@ void setup() {
   // Uncomment and run it once, if you want to erase stored info
   // reset();
 
+  // TODO, store and read from EEPROM
+  color_TIME = readIntEEPROM(ADR_COLOR_TIME);
+  if (!color_TIME) {
+    color_TIME = WHITE;
+  }
+  color_NAME = readIntEEPROM(ADR_COLOR_NAME);
+  if (!color_NAME) {
+    color_NAME = WHITE;
+  }
+
+  if (!LittleFS.begin()) {
+    Serial.println("LittleFS Mount Failed");
+    return;
+  }
+  server.onNotFound([]() {
+    if (!handleFile(server.urlDecode(server.uri())))
+      server.send(404, "text/plain", "FileNotFound");
+  });
 
   setupTime();
 
@@ -78,6 +100,7 @@ void setup() {
 void loop() {
   wifiManager.process();
   ArduinoOTA.handle();
+  server.handleClient();
 
   if (readTimeInterval()) {
     time_t timeNowUTC;
@@ -91,6 +114,16 @@ void loop() {
     print(timeString);
     showTimeString(timeString);
     checkWifiDisconnect();
+  }
+  if (storeColorsInterval()) {
+    if (storeColorTime) {
+      writeIntEEPROM(ADR_COLOR_TIME, color_TIME);
+      storeColorTime = false;
+    }
+    if (storeColorName) {
+      writeIntEEPROM(ADR_COLOR_NAME, color_NAME);
+      storeColorName = false;
+    }
   }
   if (checkUpdateInterval() && AUTO_UPDATE) {
     if (isWifiConnected()) {
@@ -217,6 +250,12 @@ bool checkUpdateInterval() {
   return interval;
 }
 
+bool storeColorsInterval() {
+  bool interval = (storeColorName || storeColorTime) && (long)millis() - lastCheckUpdate > PERIOD_STORE_COLORS;
+  if (interval) lastCheckUpdate = millis();
+  return interval;
+}
+
 bool isWifiConnected() {
   return (WiFi.status() == WL_CONNECTED) && (WiFi.localIP().toString() != "0.0.0.0");
 }
@@ -275,9 +314,54 @@ void setupWifiManager() {
 
 void onWifiConnect() {
   setupOTA();
+  server.on("/api/color", HTTP_POST, setColor);
+  server.on("/api/color", HTTP_GET, getColor);
+  server.begin();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
   configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
+}
+
+bool setColor() {
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  StaticJsonDocument<300> JSONDocument;
+  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
+  if (err) { //Check for errors in parsing
+    server.send(400, "application/json", "Body could not be parsed");
+    return false;
+  }
+  uint32_t color = Adafruit_NeoPixel::Color(JSONDocument["r"], JSONDocument["g"], JSONDocument["b"]);
+
+  if (server.arg("type") == "time") {
+    color_TIME = color;
+    storeColorTime = true;
+  } else if (server.arg("type") == "name") {
+    color_NAME = color;
+    storeColorName = true;
+  } else {
+    server.send(400, "application/json", "Color type unknown");
+    return false;
+  }
+  matrix.draw();
+
+  server.send(200, "application/json", server.arg("plain"));
+  return true;
+}
+bool getColor() {
+  uint32_t color;
+  if (server.arg("type") == "time") {
+    color = color_TIME;
+  } else if (server.arg("type") == "name") {
+    color = color_NAME;
+  } else {
+    server.send(400, "application/json", "Color type unknown");
+    return false;
+  }
+  server.send(200, "application/json", (String)color);
+  return true;
 }
 
 void onUpdateProgress(unsigned int progress, unsigned int total) {
@@ -421,4 +505,9 @@ uint32_t sntp_update_delay_MS_rfc_not_less_than_15000() {
 }
 uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
   return 2000UL; // 2s, 60s limit is not a restriction anymore
+}
+
+bool handleFile(String&& path) {
+  if (path.endsWith("/")) path += "index.html";
+  return LittleFS.exists(path) ? ({ File f = LittleFS.open(path, "r"); server.streamFile(f, mime::getContentType(path)); f.close(); true; }) : false;
 }

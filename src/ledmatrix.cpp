@@ -49,10 +49,10 @@ void LEDMatrix::draw() {
           color = BLACK;
           break;
         case TIME:
-          color = WHITE;
+          color = color_TIME;
           break;
         case NAME:
-          color = WHITE;
+          color = color_NAME;
           break;
         case OTHER:
           color = GREEN;
