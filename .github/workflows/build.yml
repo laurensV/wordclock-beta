@@ -18,12 +18,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    # - name: Compile
-    #   uses: ArminJo/arduino-test-compile@v3
-    #   with:
-    #     arduino-board-fqbn: esp8266:esp8266:nodemcuv2
-    #     platform-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
-    #     required-libraries: ArduinoJson,Adafruit NeoPixel,DS3231,WiFiManager
+    - name: Compile
+      uses: ArminJo/arduino-test-compile@v3
+      with:
+        arduino-board-fqbn: esp8266:esp8266:nodemcuv2
+        platform-url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
+        required-libraries: ArduinoJson,Adafruit NeoPixel,DS3231,WiFiManager
     - name: Generate filesystem binary
       run: |
         wget https://github.com/earlephilhower/mklittlefs/releases/download/3.2.0/x86_64-linux-gnu-mklittlefs-975bd0f.tar.gz
