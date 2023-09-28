@@ -53,14 +53,30 @@ void setup() {
   // Uncomment and run it once, if you want to erase stored info
   // reset();
 
-  // TODO, store and read from EEPROM
-  color_TIME = readIntEEPROM(ADR_COLOR_TIME);
+  EEPROM.get(ADR_COLOR_TIME, color_TIME);
   if (!color_TIME) {
     color_TIME = WHITE;
   }
-  color_NAME = readIntEEPROM(ADR_COLOR_NAME);
+  EEPROM.get(ADR_COLOR_NAME, color_NAME);
   if (!color_NAME) {
     color_NAME = WHITE;
+  }
+
+  EEPROM.get(ADR_BRIGHTNESS, brightness);
+  if (!brightness) {
+    brightness = 255;
+  }
+
+  EEPROM.get(ADR_NM, checkNightMode);
+  EEPROM.get(ADR_NM_START_H, nightModeStartHour);
+  EEPROM.get(ADR_NM_START_M, nightModeStartMin);
+  EEPROM.get(ADR_NM_END_H, nightModeEndHour);
+  EEPROM.get(ADR_NM_END_M, nightModeEndMin);
+  if (!nightModeStartHour && !nightModeStartMin && !nightModeEndHour && !nightModeEndMin) {
+    nightModeStartHour = 0;
+    nightModeStartMin = 0;
+    nightModeEndHour = 7;
+    nightModeEndMin = 0;
   }
 
   if (!LittleFS.begin()) {
@@ -75,7 +91,7 @@ void setup() {
   setupTime();
 
   pixels.begin();
-  pixels.setBrightness(100);
+  pixels.setBrightness(brightness);
   pixels.clear();
   for (int i = 0; i < NUM_PIXELS; i++) {
     uint16_t hue = (i * 65536) / NUM_PIXELS;
@@ -85,7 +101,6 @@ void setup() {
     pixels.show();
     delay(20);
   }
-
   setupWifiManager();
   if (wifiManager.autoConnect(AP_SSID)) {
     print("Reconnected to WiFi");
@@ -98,7 +113,10 @@ void setup() {
 // ----------------------------------------------------------------------------------
 
 void loop() {
-  wifiManager.process();
+  if (wifiManager.process()) {
+    print("Connected to WiFi");
+    onWifiConnect();
+  }
   ArduinoOTA.handle();
   server.handleClient();
 
@@ -109,21 +127,28 @@ void loop() {
     timeInfo = localtime(&timeNowUTC);
     int hours = timeInfo->tm_hour;
     int minutes = timeInfo->tm_min;
+    setNightMode(hours * 60 + minutes);
     print(String(hours) + ":" + String(minutes) + " - ", false);
     String timeString = timeToString(hours, minutes);
     print(timeString);
-    showTimeString(timeString);
+    if (!nightMode) {
+      showTimeString(timeString);
+    } else {
+      matrix.clear();
+      matrix.draw();
+    }
     checkWifiDisconnect();
   }
   if (storeColorsInterval()) {
     if (storeColorTime) {
-      writeIntEEPROM(ADR_COLOR_TIME, color_TIME);
+      EEPROM.put(ADR_COLOR_TIME, color_TIME);
       storeColorTime = false;
     }
     if (storeColorName) {
-      writeIntEEPROM(ADR_COLOR_NAME, color_NAME);
+      EEPROM.put(ADR_COLOR_NAME, color_NAME);
       storeColorName = false;
     }
+    EEPROM.commit();
   }
   if (checkUpdateInterval() && AUTO_UPDATE) {
     if (isWifiConnected()) {
@@ -152,6 +177,17 @@ void print(String message, bool newline) {
 }
 void print(int number, bool newline) {
   print(String(number), newline);
+}
+
+void setNightMode(int timeInMinutes) {
+  int nightModeStartTime = (nightModeStartHour * 60 + nightModeStartMin);
+  int nightModeEndTime = (nightModeEndHour * 60 + nightModeEndMin);
+  if (nightModeStartTime > nightModeEndTime) {
+    // over midnight
+    nightMode = checkNightMode && timeInMinutes >= nightModeStartTime || timeInMinutes < nightModeEndTime;
+  } else {
+    nightMode = checkNightMode && timeInMinutes >= nightModeStartTime && timeInMinutes < nightModeEndTime;
+  }
 }
 
 void showTimeString(String timeString) {
@@ -295,34 +331,82 @@ void printIP() {
   matrix.print(FONT_NUMBERS[address % 10], x, 6, LEDMatrix::OTHER);
   matrix.draw();
 }
-void configModeCallback(WiFiManager* wm) {
-  print("Entered AP config mode");
-  print(WiFi.softAPIP().toString());
 
-  print(wm->getConfigPortalSSID());
-}
-void saveConfigCallback() {
-  print("Saved and connected to WiFi.");
-  onWifiConnect();
-}
 void setupWifiManager() {
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.setHostname(HOSTNAME);
-  wifiManager.setAPCallback(configModeCallback);
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
+}
+
+void setupServer() {
+  server.enableCORS(true);
+  server.on("/api/color", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
+  server.on("/api/settings", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
+  server.on("/api/settings", HTTP_GET, getSettings);
+  server.on("/api/settings", HTTP_POST, saveSettings);
+  server.on("/api/color", HTTP_POST, setColor);
+  server.on("/api/color", HTTP_GET, getColor);
+  server.begin();
 }
 
 void onWifiConnect() {
   setupOTA();
-  server.on("/api/color", HTTP_POST, setColor);
-  server.on("/api/color", HTTP_GET, getColor);
-  server.begin();
+  setupServer();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
   configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
+bool saveSettings() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  StaticJsonDocument<300> JSONDocument;
+  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
+  if (err) { //Check for errors in parsing
+    server.send(400, "application/json", "Body could not be parsed");
+    return false;
+  }
+  if (JSONDocument["brightness"] >= 10 && JSONDocument["brightness"] <= 255) {
+    brightness = JSONDocument["brightness"];
+    pixels.setBrightness(brightness);
+    EEPROM.put(ADR_BRIGHTNESS, brightness);
+  }
+  checkNightMode = JSONDocument["nm"];
+  EEPROM.put(ADR_NM, checkNightMode);
+
+  if (JSONDocument["nm_start_h"] >= 0 && JSONDocument["nm_start_h"] <= 23 &&
+    JSONDocument["nm_start_m"] >= 0 && JSONDocument["nm_start_m"] <= 59 &&
+    JSONDocument["nm_end_h"] >= 0 && JSONDocument["nm_end_h"] <= 23 &&
+    JSONDocument["nm_end_m"] >= 0 && JSONDocument["nm_end_m"] <= 59) {
+    nightModeStartHour = JSONDocument["nm_start_h"];
+    nightModeStartMin = JSONDocument["nm_start_m"];
+    nightModeEndHour = JSONDocument["nm_end_h"];
+    nightModeEndMin = JSONDocument["nm_end_m"];
+    EEPROM.put(ADR_NM_START_H, nightModeStartHour);
+    EEPROM.put(ADR_NM_START_M, nightModeStartMin);
+    EEPROM.put(ADR_NM_END_H, nightModeEndHour);
+    EEPROM.put(ADR_NM_END_M, nightModeEndMin);
+  }
+  EEPROM.commit();
+  matrix.draw();
+  server.send(200, "application/json", server.arg("plain"));
+  return true;
+}
+
+bool getSettings() {
+  server.send(200, "application/json", "{\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + "}");
+  return true;
+}
 
 bool setColor() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
   if (server.hasArg("plain") == false) {
     server.send(400, "application/json", "Body not received");
     return false;
@@ -398,10 +482,12 @@ void setupTime() {
   // Start the I2C interface (needed for DS3231 clock)
   Wire.begin();
   rtc.setClockMode(false);
-  if ((readIntEEPROM(ADR_RTC) && rtc.getYear())) {
+  bool rtcSet;
+  EEPROM.get(ADR_RTC_SET, rtcSet);
+  if ((rtcSet && rtc.getYear())) {
     print("RTC already set, skipping set time");
   } else {
-    if (readIntEEPROM(ADR_RTC)) {
+    if (rtcSet) {
       print("WARNING: RTC lost power. Compile again or connect the WiFi to sync the time");
     }
     DateTime compiled = DateTime(__DATE__, __TIME__);
@@ -412,14 +498,12 @@ void setupTime() {
     int32_t offset = mktime(tmptime) - mktime(gmtime(&local_compile));
     print("setting RTC to compile UTC time + 33 seconds");
     rtc.setEpoch(local_compile - offset + 33);
-    writeIntEEPROM(ADR_RTC, 1);
+    EEPROM.put(ADR_RTC_SET, true);
+    EEPROM.commit();
   }
 
   // callback for set time updates
   settimeofday_cb(time_set);
-  // set the system time to the RTC time
-  // timeval tv = { (RTClib::now()).unixtime(), 0 };
-  // settimeofday(&tv, nullptr);
 }
 
 void reset() {
@@ -432,28 +516,6 @@ void reset() {
   }
 }
 
-/**
- * @brief Write value to EEPROM
- *
- * @param address address to write the value
- * @param value value to write
- */
-void writeIntEEPROM(int address, int value) {
-  EEPROM.put(address, value);
-  EEPROM.commit();
-}
-
-/**
- * @brief Read value from EEPROM
- *
- * @param address address
- * @return int value
- */
-int readIntEEPROM(int address) {
-  int value;
-  EEPROM.get(address, value);
-  return value;
-}
 
 /**
  * @brief Converts the given time as sentence (String)

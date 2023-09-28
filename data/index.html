@@ -1,27 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8">
-<title>JouwWoordklok</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="JouwWoordklok Control Panel">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
-<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
-<style>
-  .IroColorPicker {
-    display: flex !important;
-    flex-direction: column;
-    align-items: center;
-  }
-</style>
+
+<head>
+  <meta charset="utf-8">
+  <title>JouwWoordklok</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="JouwWoordklok Control Panel">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+  <style>
+    .IroColorPicker {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .settings {
+      height: 0px;
+      transition: height 0.5s;
+      overflow: hidden;
+    }
+
+    .settings.show {
+      height: 180px;
+    }
+  </style>
 </head>
-<body>
-  <div id="app">
-    <section class="section">
+
+<body class="has-background-white-ter" style="min-height:100vh">
+  <div id="app" style="max-width: 500px;" class="mx-auto has-background-white">
+    <section class="section pt-2">
       <div class="container">
-        <div class="has-text-centered">
+        <div class="is-flex is-justify-content-space-between is-align-items-center">
           <img src="/img/logo.png" width="250" />
+          <a @click="showSettings = !showSettings"><img src="/img/settings.svg" style="height:30px" /></a>
         </div>
+        <form @submit.prevent="saveSettings" class="settings" :class="{'show': showSettings}">
+          <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
+            <label for="brightness" class="is-flex-grow-1">Brightness:</label>
+            <input v-model="brightness" type="range" id="brightness" name="volume" min="10" max="255">
+          </div>
+          <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
+            <label for="nm" class="is-flex-grow-1">Nightmode: </label>
+            <input class="checkbox" type="checkbox" id="nm" name="nm" v-model="nm">
+          </div>
+          <div class="is-flex is-justify-content-space-between is-align-items-center pb-2">
+            <div>
+              <label class="is-flex-grow-1" for="nm_start" :class="{'has-text-grey': !nm}">start time: </label>
+              <input :required="nm" v-model="nm_start" :disabled="!nm" type="time" id="nm_start" name="nm_start" min="00:00"
+                max="23:59">
+            </div>
+            <div>
+              <label class="is-flex-grow-1" for="nm_end" :class="{'has-text-grey': !nm}">end time: </label>
+              <input :required="nm" v-model="nm_end" :disabled="!nm" type="time" id="nm_end" name="nm_end" min="00:00" max="23:59">
+            </div>
+          </div>
+          <div class="has-text-right mt-2">
+            <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
+          </div>
+        </form>
         <div class="tabs is-centered is-medium">
           <ul>
             <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
@@ -42,63 +80,110 @@
       return (...args) => {
         wait = lastCall + delay - Date.now();
         clearTimeout(handle);
-          handle = setTimeout(() => {
-            f(...args);
-            lastCall = Date.now();
-          }, wait); 
+        handle = setTimeout(() => {
+          f(...args);
+          lastCall = Date.now();
+        }, wait);
       };
     }
     let colorPicker;
     let tabChange = false;
+    const baseUrl = 'http://192.168.2.17';
 
     createApp({
       setup() {
         const colorType = ref('time');
         const loading = ref(false);
-        // watch works directly on a ref
+        const loadingSettings = ref(false);
+        const showSettings = ref(false);
+        const brightness = ref();
+        const nm = ref();
+        const nm_end = ref();
+        const nm_start = ref();
+        const getSettings = async () => {
+          try {
+            loadingSettings.value = true;
+            const response = await fetch(baseUrl + '/api/settings');
+            const result = await response.json();
+            brightness.value = result.brightness;
+            nm.value = !!result.nm;
+            nm_start.value = result.nm_start_h.toString().padStart(2, '0') + ":" + result.nm_start_m.toString().padStart(2, '0');
+            nm_end.value = result.nm_end_h.toString().padStart(2, '0') + ":" + result.nm_end_m.toString().padStart(2, '0');
+          } catch (e) {
+            alert('Could not retrieve settings');
+            console.error(e);
+          }
+          loadingSettings.value = false;
+        }
+        const saveSettings = async () => {
+          try {
+            loadingSettings.value = true;
+            const response = await fetch(baseUrl + '/api/settings', {
+              method: 'POST',
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                brightness: parseInt(brightness.value),
+                nm: !!nm.value,
+                nm_start_h: parseInt(nm_start.value.split(":")[0]),
+                nm_start_m: parseInt(nm_start.value.split(":")[1]),
+                nm_end_h: parseInt(nm_end.value.split(":")[0]),
+                nm_end_m: parseInt(nm_end.value.split(":")[1]),
+              })
+            });
+            const result = await response.json();
+            showSettings.value = false;
+          } catch (e) {
+            alert('Could not save settings');
+            console.error(e);
+          }
+          loadingSettings.value = false;
+        }
         const getColor = async (type) => {
           try {
             loading.value = true;
-            const response = await fetch('./api/color?type='+type);
+            const response = await fetch(baseUrl + '/api/color?type=' + type);
             const color = '#' + (await response.json()).toString(16).padStart(6, '0');
             if (!colorPicker) {
               colorPicker = new window.iro.ColorPicker("#picker", {
-                  // Set the size of the color picker
-                  width: 320,
-                  // Set the initial color to pure red
-                  color: color,
-                  layout: [
-                    {
-                      component: iro.ui.Wheel,
-                    },
-                    // { 
-                    //   component: window.iro.ui.Slider,
-                    //   options: {
-                    //     // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
-                    //     sliderType: 'saturation'
-                    //   }
-                    // },
-                  ]
-                });
-                colorPicker.on('color:change', throttle(async function(color) {
-                  if (!tabChange) {
-                    try {
-                      const response = await fetch('./api/color?type='+colorType.value, {
-                        method: 'POST',
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(color.rgb)
-                      })
-                      const result = await response.json();
-                    } catch (e) {
-                      console.error(e);
-                    }
-                  } else {
-                    tabChange = false;
+                // Set the size of the color picker
+                width: 320,
+                // Set the initial color to pure red
+                color: color,
+                layout: [
+                  {
+                    component: iro.ui.Wheel,
+                  },
+                  // { 
+                  //   component: window.iro.ui.Slider,
+                  //   options: {
+                  //     // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
+                  //     sliderType: 'saturation'
+                  //   }
+                  // },
+                ]
+              });
+              colorPicker.on('color:change', throttle(async function (color) {
+                if (!tabChange) {
+                  try {
+                    const response = await fetch(baseUrl + '/api/color?type=' + colorType.value, {
+                      method: 'POST',
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify(color.rgb)
+                    })
+                    const result = await response.json();
+                  } catch (e) {
+                    alert('Could not save color');
+                    console.error(e);
                   }
-      
-                }, 200));
+                } else {
+                  tabChange = false;
+                }
+
+              }, 200));
             } else {
               tabChange = true;
               colorPicker.color.set(color);
@@ -111,16 +196,24 @@
         watch(colorType, async (newType) => {
           getColor(newType);
         })
-
+        getSettings();
         onMounted(() => {
           getColor(colorType.value);
         })
         return {
-          colorType
+          colorType,
+          showSettings,
+          nm,
+          nm_start,
+          nm_end,
+          brightness,
+          loading,
+          loadingSettings,
+          saveSettings
         }
       }
     }).mount('#app')
   </script>
 </body>
-</html>
 
+</html>
