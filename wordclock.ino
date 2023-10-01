@@ -6,7 +6,6 @@
 #include <coredecls.h>
 #include <TZ.h>
 #include <ESP8266WebServer.h>
-#include "LittleFS.h"
 
 // libraries from library manager
 #include <DS3231.h> // https://github.com/NorthernWidget/DS3231
@@ -17,6 +16,7 @@
 
 // own services
 #include "wordclock.h"
+#include "src/filesystem.h"
 #include "src/udplogger.h"
 #include "src/esp8266fota.h"
 #include "src/ledmatrix.h"
@@ -47,11 +47,113 @@ void setup() {
   delay(1000);
   Serial.printf("\nSketchname: %s\nBuild: %s\n", (__FILE__), (__TIMESTAMP__));
   Serial.print("Version: "); Serial.println(VERSION);
+  setupPersistentVars();
+  setupFileSystem();
+  setupTime();
+  setupPixels();
+  setupWifiManager();
+}
+
+// ----------------------------------------------------------------------------------
+//                                        LOOP
+// ----------------------------------------------------------------------------------
+
+void loop() {
+  if (wifiManager.process()) {
+    print("Connected to WiFi");
+    onWifiConnect();
+  }
+  ArduinoOTA.handle();
+  server.handleClient();
+
+
+  if (readTimeInterval()) {
+    time_t timeNowUTC;
+    struct tm* timeInfo;
+    timeNowUTC = (RTClib::now()).unixtime(); // time(nullptr);
+    timeInfo = localtime(&timeNowUTC);
+    int hours = timeInfo->tm_hour;
+    int minutes = timeInfo->tm_min;
+    setNightMode(hours * 60 + minutes);
+    String timeString;
+    switch (mode) {
+      case WORD_CLOCK:
+        timeString = timeToString(hours, minutes);
+        print(timeString);
+        if (!nightMode) {
+          showTimeString(timeString);
+        }
+        break;
+      case DIGITAL_CLOCK:
+        print(String(hours) + ":" + String(minutes));
+        if (!nightMode) {
+          showDigitalTime(hours, minutes);
+        }
+        break;
+    }
+    checkWifiDisconnect();
+  }
+
+  if (storeColorsInterval()) {
+    if (storeColorTime) {
+      EEPROM.put(ADR_COLOR_TIME, color_TIME);
+      storeColorTime = false;
+    }
+    if (storeColorName) {
+      EEPROM.put(ADR_COLOR_NAME, color_NAME);
+      storeColorName = false;
+    }
+    EEPROM.commit();
+  }
+  if (checkUpdateInterval() && AUTO_UPDATE) {
+    if (isWifiConnected()) {
+      print("checking for new updates..");
+      bool updatedNeeded = FOTA.execHTTPcheck();
+      if (updatedNeeded) {
+        print("New update available!");
+        FOTA.execOTA();
+      } else {
+        print("Already running latest version");
+      }
+    }
+  }
+}
+
+
+void setupFileSystem() {
+  if (!LittleFS.begin()) {
+    Serial.println("LittleFS Mount Failed");
+  }
+  // clockLayout = load_from_file("clock_layout.txt");
+}
+
+void setupPixels() {
+  pixels.begin();
+  pixels.setBrightness(brightness);
+  pixels.clear();
+  for (int i = 0; i < NUM_PIXELS; i++) {
+    uint16_t hue = (i * 65536) / NUM_PIXELS;
+    uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
+    color = pixels.gamma32(color);
+    pixels.setPixelColor(i, color);
+    pixels.show();
+    delay(20);
+  }
+}
+
+void setupPersistentVars() {
   //Init EEPROM
   EEPROM.begin(EEPROM_SIZE);
 
   // Uncomment and run it once, if you want to erase stored info
-  // reset();
+  // resetEEPROM();
+
+  EEPROM.get(ADR_MODE, mode);
+
+  EEPROM.get(ADR_BRIGHTNESS, brightness);
+  if (!brightness) {
+    brightness = 255;
+  }
 
   EEPROM.get(ADR_COLOR_TIME, color_TIME);
   if (!color_TIME) {
@@ -78,105 +180,6 @@ void setup() {
     nightModeEndHour = 7;
     nightModeEndMin = 0;
   }
-
-  if (!LittleFS.begin()) {
-    Serial.println("LittleFS Mount Failed");
-    return;
-  }
-  server.onNotFound([]() {
-    if (!handleFile(server.urlDecode(server.uri())))
-      server.send(404, "text/plain", "FileNotFound");
-  });
-
-  setupTime();
-
-  pixels.begin();
-  pixels.setBrightness(brightness);
-  pixels.clear();
-  for (int i = 0; i < NUM_PIXELS; i++) {
-    uint16_t hue = (i * 65536) / NUM_PIXELS;
-    uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
-    color = pixels.gamma32(color);
-    pixels.setPixelColor(i, color);
-    pixels.show();
-    delay(20);
-  }
-  setupWifiManager();
-  if (wifiManager.autoConnect(AP_SSID)) {
-    print("Reconnected to WiFi");
-    onWifiConnect();
-  }
-}
-
-// ----------------------------------------------------------------------------------
-//                                        LOOP
-// ----------------------------------------------------------------------------------
-
-void loop() {
-  if (wifiManager.process()) {
-    print("Connected to WiFi");
-    onWifiConnect();
-  }
-  ArduinoOTA.handle();
-  server.handleClient();
-
-  if (readTimeInterval()) {
-    time_t timeNowUTC;
-    struct tm* timeInfo;
-    timeNowUTC = (RTClib::now()).unixtime(); // time(nullptr);
-    timeInfo = localtime(&timeNowUTC);
-    int hours = timeInfo->tm_hour;
-    int minutes = timeInfo->tm_min;
-    setNightMode(hours * 60 + minutes);
-    print(String(hours) + ":" + String(minutes) + " - ", false);
-    String timeString = timeToString(hours, minutes);
-    print(timeString);
-    if (!nightMode) {
-      showTimeString(timeString);
-    } else {
-      matrix.clear();
-      matrix.draw();
-    }
-    checkWifiDisconnect();
-  }
-  if (storeColorsInterval()) {
-    if (storeColorTime) {
-      EEPROM.put(ADR_COLOR_TIME, color_TIME);
-      storeColorTime = false;
-    }
-    if (storeColorName) {
-      EEPROM.put(ADR_COLOR_NAME, color_NAME);
-      storeColorName = false;
-    }
-    EEPROM.commit();
-  }
-  if (checkUpdateInterval() && AUTO_UPDATE) {
-    if (isWifiConnected()) {
-      print("checking for new updates..");
-      bool updatedNeeded = FOTA.execHTTPcheck();
-      if (updatedNeeded) {
-        print("New update available!");
-        FOTA.execOTA();
-      } else {
-        print("Already running latest version");
-      }
-    }
-  }
-}
-
-// ----------------------------------------------------------------------------------
-//                                        OTHER FUNCTIONS
-// ----------------------------------------------------------------------------------
-void print(String message, bool newline) {
-  if (newline) {
-    Serial.println(message);
-  } else {
-    Serial.print(message);
-  }
-  logger.log(message);
-}
-void print(int number, bool newline) {
-  print(String(number), newline);
 }
 
 void setNightMode(int timeInMinutes) {
@@ -188,79 +191,15 @@ void setNightMode(int timeInMinutes) {
   } else {
     nightMode = checkNightMode && timeInMinutes >= nightModeStartTime && timeInMinutes < nightModeEndTime;
   }
+  if (nightMode) {
+    matrix.clear();
+    matrix.draw();
+  }
 }
 
-void showTimeString(String timeString) {
-  int messageStart = 0;
-  String word = "";
-  int lastLetterClock = 0;
-  int positionOfWord = 0;
-  int nextSpace = 0;
-  int index = 0;
-
-  // add space on the end of timeString for splitting
-  timeString = timeString + " ";
-
-  matrix.clear();
-
-  while (true) {
-    // extract next word from timeString
-    word = split(timeString, ' ', index);
-    index++;
-
-    if (word.length() > 0) {
-      positionOfWord = letters.indexOf(word, lastLetterClock);
-
-      if (positionOfWord >= 0) {
-        // word found on clock
-        for (int i = 0; i < word.length(); i++) {
-          int row = (positionOfWord + i) / CLOCK_WIDTH;
-          int col = (positionOfWord + i) % CLOCK_WIDTH;
-          matrix.setPixelType(row, col, LEDMatrix::TIME);
-        }
-        lastLetterClock = positionOfWord + word.length();
-      } else {
-        // word is not possible to show on clock
-        print("word is not possible to show on clock: " + String(word));
-      }
-    } else {
-      // end - no more word in message
-      break;
-    }
-  }
-  for (int i = 0; i < letters.length(); i++) {
-    if (letters.charAt(i) == '*') {
-      int row = i / CLOCK_WIDTH;
-      int col = i % CLOCK_WIDTH;
-      matrix.setPixelType(row, col, LEDMatrix::NAME);
-    }
-  }
-  matrix.draw();
-}
-
-/**
- * @brief Splits a string at given character and return specified element
- *
- * @param s string to split
- * @param parser separating character
- * @param index index of the element to return
- * @return String
- */
-String split(String s, char parser, int index) {
-  String rs = "";
-  int parserIndex = index;
-  int parserCnt = 0;
-  int rFromIndex = 0, rToIndex = -1;
-  while (index >= parserCnt) {
-    rFromIndex = rToIndex + 1;
-    rToIndex = s.indexOf(parser, rFromIndex);
-    if (index == parserCnt) {
-      if (rToIndex == 0 || rToIndex == -1) return "";
-      return s.substring(rFromIndex, rToIndex);
-    } else parserCnt++;
-  }
-  return rs;
-}
+/***************************************************************
+ *                       Intervals
+ ***************************************************************/
 
 void pauseTimer(long* timer, unsigned long delay = 0) {
   if (!delay) {
@@ -292,6 +231,23 @@ bool storeColorsInterval() {
   return interval;
 }
 
+
+
+/***************************************************************
+ *                            WiFi
+ ***************************************************************/
+void setupWifiManager() {
+  // print("resetting WiFi settings");
+  // wifiManager.resetSettings();
+  wifiManager.setConfigPortalBlocking(false);
+  wifiManager.setHostname(HOSTNAME);
+  if (wifiManager.autoConnect(AP_SSID)) {
+    print("Reconnected to WiFi");
+    onWifiConnect();
+  }
+}
+
+
 bool isWifiConnected() {
   return (WiFi.status() == WL_CONNECTED) && (WiFi.localIP().toString() != "0.0.0.0");
 }
@@ -300,8 +256,10 @@ void checkWifiDisconnect() {
   if (!wifiManager.getConfigPortalActive()) {
     if (WiFi.status() != WL_CONNECTED) {
       print("no wifi connection..");
-      pixels.setPixelColor(100, pixels.Color(255, 0, 0, 0));
-      pixels.show();
+      if (!nightMode) {
+        pixels.setPixelColor(100, pixels.Color(255, 0, 0, 0));
+        pixels.show();
+      }
     } else if (WiFi.localIP().toString() == "0.0.0.0") {
       // detected bug: ESP8266 - WiFi status not changing
       // https://github.com/esp8266/Arduino/issues/2593#issuecomment-323801447
@@ -332,28 +290,6 @@ void printIP() {
   matrix.draw();
 }
 
-void setupWifiManager() {
-  wifiManager.setConfigPortalBlocking(false);
-  wifiManager.setHostname(HOSTNAME);
-}
-
-void setupServer() {
-  server.enableCORS(true);
-  server.on("/api/color", HTTP_OPTIONS, []() {
-    server.sendHeader("Access-Control-Allow-Headers", "*");
-    server.send(204);
-  });
-  server.on("/api/settings", HTTP_OPTIONS, []() {
-    server.sendHeader("Access-Control-Allow-Headers", "*");
-    server.send(204);
-  });
-  server.on("/api/settings", HTTP_GET, getSettings);
-  server.on("/api/settings", HTTP_POST, saveSettings);
-  server.on("/api/color", HTTP_POST, setColor);
-  server.on("/api/color", HTTP_GET, getColor);
-  server.begin();
-}
-
 void onWifiConnect() {
   setupOTA();
   setupServer();
@@ -361,108 +297,30 @@ void onWifiConnect() {
   printIP();
   configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
-bool saveSettings() {
-  server.sendHeader("Access-Control-Allow-Headers", "*");
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json", "Body not received");
-    return false;
-  }
-  StaticJsonDocument<300> JSONDocument;
-  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
-  if (err) { //Check for errors in parsing
-    server.send(400, "application/json", "Body could not be parsed");
-    return false;
-  }
-  if (JSONDocument["brightness"] >= 10 && JSONDocument["brightness"] <= 255) {
-    brightness = JSONDocument["brightness"];
-    pixels.setBrightness(brightness);
-    EEPROM.put(ADR_BRIGHTNESS, brightness);
-  }
-  checkNightMode = JSONDocument["nm"];
-  EEPROM.put(ADR_NM, checkNightMode);
 
-  if (JSONDocument["nm_start_h"] >= 0 && JSONDocument["nm_start_h"] <= 23 &&
-    JSONDocument["nm_start_m"] >= 0 && JSONDocument["nm_start_m"] <= 59 &&
-    JSONDocument["nm_end_h"] >= 0 && JSONDocument["nm_end_h"] <= 23 &&
-    JSONDocument["nm_end_m"] >= 0 && JSONDocument["nm_end_m"] <= 59) {
-    nightModeStartHour = JSONDocument["nm_start_h"];
-    nightModeStartMin = JSONDocument["nm_start_m"];
-    nightModeEndHour = JSONDocument["nm_end_h"];
-    nightModeEndMin = JSONDocument["nm_end_m"];
-    EEPROM.put(ADR_NM_START_H, nightModeStartHour);
-    EEPROM.put(ADR_NM_START_M, nightModeStartMin);
-    EEPROM.put(ADR_NM_END_H, nightModeEndHour);
-    EEPROM.put(ADR_NM_END_M, nightModeEndMin);
-  }
-  EEPROM.commit();
-  matrix.draw();
-  server.send(200, "application/json", server.arg("plain"));
-  return true;
-}
-
-bool getSettings() {
-  server.send(200, "application/json", "{\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + "}");
-  return true;
-}
-
-bool setColor() {
-  server.sendHeader("Access-Control-Allow-Headers", "*");
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json", "Body not received");
-    return false;
-  }
-  StaticJsonDocument<300> JSONDocument;
-  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
-  if (err) { //Check for errors in parsing
-    server.send(400, "application/json", "Body could not be parsed");
-    return false;
-  }
-  uint32_t color = Adafruit_NeoPixel::Color(JSONDocument["r"], JSONDocument["g"], JSONDocument["b"]);
-
-  if (server.arg("type") == "time") {
-    color_TIME = color;
-    storeColorTime = true;
-  } else if (server.arg("type") == "name") {
-    color_NAME = color;
-    storeColorName = true;
-  } else {
-    server.send(400, "application/json", "Color type unknown");
-    return false;
-  }
-  matrix.draw();
-
-  server.send(200, "application/json", server.arg("plain"));
-  return true;
-}
-bool getColor() {
-  uint32_t color;
-  if (server.arg("type") == "time") {
-    color = color_TIME;
-  } else if (server.arg("type") == "name") {
-    color = color_NAME;
-  } else {
-    server.send(400, "application/json", "Color type unknown");
-    return false;
-  }
-  server.send(200, "application/json", (String)color);
-  return true;
-}
+/***************************************************************
+ *                    Over-the-Air Updates
+ ***************************************************************/
 
 void onUpdateProgress(unsigned int progress, unsigned int total) {
   print("Progress: " + String(progress / (total / 100)));
-  pixels.clear();
-  for (int i = 0; i < progress / (total / NUM_PIXELS); i++) {
-    int row = i / CLOCK_WIDTH;
-    pixels.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, pixels.Color(0, 0, 255));
+  if (!nightMode) {
+    pixels.clear();
+    for (int i = 0; i < progress / (total / NUM_PIXELS); i++) {
+      int row = i / CLOCK_WIDTH;
+      pixels.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, pixels.Color(0, 0, 255));
+    }
+    pixels.show();
   }
-  pixels.show();
 }
 void onUpdateFinished() {
-  pixels.clear();
-  for (int i = 0; i < NUM_PIXELS; i++) {
-    pixels.setPixelColor(i, pixels.Color(0, 255, 0));
+  if (!nightMode) {
+    pixels.clear();
+    for (int i = 0; i < NUM_PIXELS; i++) {
+      pixels.setPixelColor(i, pixels.Color(0, 255, 0));
+    }
+    pixels.show();
   }
-  pixels.show();
   delay(200);
 }
 
@@ -475,6 +333,12 @@ void setupOTA() {
   ArduinoOTA.onProgress(onUpdateProgress);
   ArduinoOTA.onEnd(onUpdateFinished);
 }
+
+
+/***************************************************************
+ *                       Time
+ ***************************************************************/
+
 
 void setupTime() {
   // Set timezone
@@ -506,16 +370,62 @@ void setupTime() {
   settimeofday_cb(time_set);
 }
 
-void reset() {
-  print("resetting WiFi settings");
-  wifiManager.resetSettings();
-
-  print("empty entire EEPROM");
-  for (int i = 0; i < EEPROM.length(); i++) {
-    EEPROM.write(i, 0);
-  }
+void showDigitalTime(int hours, int minutes) {
+  matrix.clear();
+  matrix.print(FONT_NUMBERS[(hours / 10)], 2, 0, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(hours % 10)], 6, 0, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(minutes / 10)], 2, 6, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(minutes % 10)], 6, 6, LEDMatrix::TIME);
+  matrix.draw();
 }
 
+void showTimeString(String timeString) {
+  int messageStart = 0;
+  String word = "";
+  int lastLetterClock = 0;
+  int positionOfWord = 0;
+  int nextSpace = 0;
+  int index = 0;
+
+  // add space on the end of timeString for splitting
+  timeString = timeString + " ";
+
+  matrix.clear();
+
+  while (true) {
+    // extract next word from timeString
+    word = split(timeString, ' ', index);
+    index++;
+
+    if (word.length() > 0) {
+      positionOfWord = clockLayout.indexOf(word, lastLetterClock);
+
+      if (positionOfWord >= 0) {
+        // word found on clock
+        for (int i = 0; i < word.length(); i++) {
+          int row = (positionOfWord + i) / CLOCK_WIDTH;
+          int col = (positionOfWord + i) % CLOCK_WIDTH;
+          matrix.setPixelType(row, col, LEDMatrix::TIME);
+        }
+        lastLetterClock = positionOfWord + word.length();
+      } else {
+        // word is not possible to show on clock
+        print("word is not possible to show on clock: " + String(word));
+      }
+    } else {
+      // end - no more word in message
+      break;
+    }
+  }
+  for (int i = 0; i < clockLayout.length(); i++) {
+    if (clockLayout.charAt(i) == '*') {
+      int row = i / CLOCK_WIDTH;
+      int col = i % CLOCK_WIDTH;
+      matrix.setPixelType(row, col, LEDMatrix::NAME);
+    }
+  }
+  matrix.draw();
+}
 
 /**
  * @brief Converts the given time as sentence (String)
@@ -569,7 +479,195 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
   return 2000UL; // 2s, 60s limit is not a restriction anymore
 }
 
+/***************************************************************
+ *                       Webserver
+ ***************************************************************/
+
+void setupServer() {
+  server.enableCORS(true);
+  server.onNotFound([]() {
+    if (!handleFile(server.urlDecode(server.uri())))
+      server.send(404, "text/plain", "FileNotFound");
+  });
+  server.on("/api/mode", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
+  server.on("/api/color", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
+  server.on("/api/settings", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
+  server.on("/api/settings", HTTP_GET, getSettings);
+  server.on("/api/settings", HTTP_POST, saveSettings);
+  server.on("/api/color", HTTP_POST, setColor);
+  server.on("/api/color", HTTP_GET, getColor);
+  server.on("/api/mode", HTTP_POST, setMode);
+  server.begin();
+}
+
+bool getSettings() {
+  server.send(200, "application/json", "{\"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + "}");
+  return true;
+}
+
+bool setMode() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+
+  String newMode = server.arg("plain");
+  print("Changing to mode " + newMode);
+  if (newMode == "word_clock") {
+    mode = WORD_CLOCK;
+  } else if (newMode == "digital_clock") {
+    mode = DIGITAL_CLOCK;
+  }
+  EEPROM.put(ADR_MODE, mode);
+  EEPROM.commit();
+
+  server.send(200, "application/json", String(mode));
+  return true;
+}
+
+bool setColor() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  StaticJsonDocument<300> JSONDocument;
+  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
+  if (err) { //Check for errors in parsing
+    server.send(400, "application/json", "Body could not be parsed");
+    return false;
+  }
+  uint32_t color = Adafruit_NeoPixel::Color(JSONDocument["r"], JSONDocument["g"], JSONDocument["b"]);
+
+  if (server.arg("type") == "time") {
+    color_TIME = color;
+    storeColorTime = true;
+  } else if (server.arg("type") == "name") {
+    color_NAME = color;
+    storeColorName = true;
+  } else {
+    server.send(400, "application/json", "Color type unknown");
+    return false;
+  }
+  matrix.draw();
+
+  server.send(200, "application/json", server.arg("plain"));
+  return true;
+}
+bool getColor() {
+  uint32_t color;
+  if (server.arg("type") == "time") {
+    color = color_TIME;
+  } else if (server.arg("type") == "name") {
+    color = color_NAME;
+  } else {
+    server.send(400, "application/json", "Color type unknown");
+    return false;
+  }
+  server.send(200, "application/json", (String)color);
+  return true;
+}
+
+bool saveSettings() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  StaticJsonDocument<300> JSONDocument;
+  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
+  if (err) { //Check for errors in parsing
+    server.send(400, "application/json", "Body could not be parsed");
+    return false;
+  }
+  if (JSONDocument["brightness"] >= 10 && JSONDocument["brightness"] <= 255) {
+    brightness = JSONDocument["brightness"];
+    pixels.setBrightness(brightness);
+    EEPROM.put(ADR_BRIGHTNESS, brightness);
+  }
+  checkNightMode = JSONDocument["nm"];
+  EEPROM.put(ADR_NM, checkNightMode);
+
+  if (JSONDocument["nm_start_h"] >= 0 && JSONDocument["nm_start_h"] <= 23 &&
+    JSONDocument["nm_start_m"] >= 0 && JSONDocument["nm_start_m"] <= 59 &&
+    JSONDocument["nm_end_h"] >= 0 && JSONDocument["nm_end_h"] <= 23 &&
+    JSONDocument["nm_end_m"] >= 0 && JSONDocument["nm_end_m"] <= 59) {
+    nightModeStartHour = JSONDocument["nm_start_h"];
+    nightModeStartMin = JSONDocument["nm_start_m"];
+    nightModeEndHour = JSONDocument["nm_end_h"];
+    nightModeEndMin = JSONDocument["nm_end_m"];
+    EEPROM.put(ADR_NM_START_H, nightModeStartHour);
+    EEPROM.put(ADR_NM_START_M, nightModeStartMin);
+    EEPROM.put(ADR_NM_END_H, nightModeEndHour);
+    EEPROM.put(ADR_NM_END_M, nightModeEndMin);
+  }
+  EEPROM.commit();
+  matrix.draw();
+  server.send(200, "application/json", server.arg("plain"));
+  return true;
+}
+
 bool handleFile(String&& path) {
   if (path.endsWith("/")) path += "index.html";
   return LittleFS.exists(path) ? ({ File f = LittleFS.open(path, "r"); server.streamFile(f, mime::getContentType(path)); f.close(); true; }) : false;
+}
+
+/***************************************************************
+ *                       Helpers/Other
+ ***************************************************************/
+
+void resetEEPROM() {
+  print("empty entire EEPROM");
+  for (int i = 0; i < EEPROM.length(); i++) {
+    EEPROM.write(i, 0);
+  }
+}
+
+
+
+/**
+ * @brief Splits a string at given character and return specified element
+ *
+ * @param s string to split
+ * @param parser separating character
+ * @param index index of the element to return
+ * @return String
+ */
+String split(String s, char parser, int index) {
+  String rs = "";
+  int parserIndex = index;
+  int parserCnt = 0;
+  int rFromIndex = 0, rToIndex = -1;
+  while (index >= parserCnt) {
+    rFromIndex = rToIndex + 1;
+    rToIndex = s.indexOf(parser, rFromIndex);
+    if (index == parserCnt) {
+      if (rToIndex == 0 || rToIndex == -1) return "";
+      return s.substring(rFromIndex, rToIndex);
+    } else parserCnt++;
+  }
+  return rs;
+}
+
+
+void print(String message, bool newline) {
+  if (newline) {
+    Serial.println(message);
+  } else {
+    Serial.print(message);
+  }
+  logger.log(message);
+}
+void print(int number, bool newline) {
+  print(String(number), newline);
 }

@@ -25,6 +25,25 @@
     .settings.show {
       height: 180px;
     }
+    .mode-link a:hover img {
+      transform: scale(1.1);
+    }
+    .mode-link[disabled] {
+      opacity: 0.3;
+    }
+    .mode-link img {
+      width: 50px;
+      height: 50px;
+      transition: transform 0.2s;
+      transform-origin: center;
+      display: inline-block;
+    }
+    .mode-link.is-active {
+      font-weight: bold;
+    }
+    .mode-link.is-active img{
+      transform: scale(1.2) !important;
+    }
   </style>
 </head>
 
@@ -60,6 +79,20 @@
             <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
           </div>
         </form>
+        <div class="columns is-multiline mt-4 is-mobile">
+          <div class="column is-4">
+            <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 0}">
+              <div class="has-text-centered"><a  @click="setMode('word_clock')" ><img src="/img/word_clock.svg" /></a></div>
+              <p class="has-text-centered">Woord Klok</p>
+            </div>
+          </div>
+          <div class="column is-4">
+            <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 1}">
+              <div class="has-text-centered"><a  @click="setMode('digital_clock')" ><img src="/img/digital_clock.svg" /></a></div>
+              <p class="has-text-centered">Digitale Klok</p>
+            </div>
+          </div>
+        </div>
         <div class="tabs is-centered is-medium">
           <ul>
             <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
@@ -100,12 +133,14 @@
         const nm = ref();
         const nm_end = ref();
         const nm_start = ref();
+        const mode = ref();
         const getSettings = async () => {
           try {
             loadingSettings.value = true;
             const response = await fetch(baseUrl + '/api/settings');
             const result = await response.json();
             brightness.value = result.brightness;
+            mode.value = result.mode;
             nm.value = !!result.nm;
             nm_start.value = result.nm_start_h.toString().padStart(2, '0') + ":" + result.nm_start_m.toString().padStart(2, '0');
             nm_end.value = result.nm_end_h.toString().padStart(2, '0') + ":" + result.nm_end_m.toString().padStart(2, '0');
@@ -115,6 +150,22 @@
           }
           loadingSettings.value = false;
         }
+        const setMode = async (newMode) => {
+          try {
+            loadingSettings.value = true;
+            const response = await fetch(baseUrl + '/api/mode', {
+              method: 'POST',
+              body: newMode
+            })
+            const result = await response.json();
+            mode.value = result;
+          } catch (e) {
+            alert('Could not change mode');
+            console.error(e);
+          }
+          loadingSettings.value = false;
+        }
+
         const saveSettings = async () => {
           try {
             loadingSettings.value = true;
@@ -209,7 +260,9 @@
           brightness,
           loading,
           loadingSettings,
-          saveSettings
+          saveSettings,
+          mode,
+          setMode
         }
       }
     }).mount('#app')
