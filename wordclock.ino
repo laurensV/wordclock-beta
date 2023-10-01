@@ -6,13 +6,13 @@
 #include <coredecls.h>
 #include <TZ.h>
 #include <ESP8266WebServer.h>
+#include <ArduinoOTA.h>
 
 // libraries from library manager
 #include <DS3231.h> // https://github.com/NorthernWidget/DS3231
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <Adafruit_NeoPixel.h> // https://github.com/adafruit/Adafruit_NeoPixel
-#include <ArduinoOTA.h>
-#include "ArduinoJson.h"
+#include "ArduinoJson.h" // https://github.com/bblanchon/ArduinoJson
 
 // own services
 #include "wordclock.h"
@@ -66,7 +66,6 @@ void loop() {
   ArduinoOTA.handle();
   server.handleClient();
 
-
   if (readTimeInterval()) {
     time_t timeNowUTC;
     struct tm* timeInfo;
@@ -105,6 +104,7 @@ void loop() {
     }
     EEPROM.commit();
   }
+
   if (checkUpdateInterval() && AUTO_UPDATE) {
     if (isWifiConnected()) {
       print("checking for new updates..");
@@ -301,7 +301,6 @@ void onWifiConnect() {
 /***************************************************************
  *                    Over-the-Air Updates
  ***************************************************************/
-
 void onUpdateProgress(unsigned int progress, unsigned int total) {
   print("Progress: " + String(progress / (total / 100)));
   if (!nightMode) {
@@ -338,8 +337,6 @@ void setupOTA() {
 /***************************************************************
  *                       Time
  ***************************************************************/
-
-
 void setupTime() {
   // Set timezone
   setTZ(TIMEZONE);
@@ -372,10 +369,10 @@ void setupTime() {
 
 void showDigitalTime(int hours, int minutes) {
   matrix.clear();
-  matrix.print(FONT_NUMBERS[(hours / 10)], 2, 0, LEDMatrix::TIME);
-  matrix.print(FONT_NUMBERS[(hours % 10)], 6, 0, LEDMatrix::TIME);
-  matrix.print(FONT_NUMBERS[(minutes / 10)], 2, 6, LEDMatrix::TIME);
-  matrix.print(FONT_NUMBERS[(minutes % 10)], 6, 6, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(hours / 10)], 3, 0, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(hours % 10)], 7, 0, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
+  matrix.print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
   matrix.draw();
 }
 
@@ -482,7 +479,6 @@ uint32_t sntp_startup_delay_MS_rfc_not_less_than_60000() {
 /***************************************************************
  *                       Webserver
  ***************************************************************/
-
 void setupServer() {
   server.enableCORS(true);
   server.onNotFound([]() {
@@ -625,15 +621,12 @@ bool handleFile(String&& path) {
 /***************************************************************
  *                       Helpers/Other
  ***************************************************************/
-
 void resetEEPROM() {
   print("empty entire EEPROM");
   for (int i = 0; i < EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
 }
-
-
 
 /**
  * @brief Splits a string at given character and return specified element
@@ -658,7 +651,6 @@ String split(String s, char parser, int index) {
   }
   return rs;
 }
-
 
 void print(String message, bool newline) {
   if (newline) {
