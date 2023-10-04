@@ -18,7 +18,7 @@ LEDMatrix::LEDMatrix(Adafruit_NeoPixel* neopixels) {
  */
 void LEDMatrix::setPixelType(uint8_t x, uint8_t y, enum LED_TYPE type) {
   // limit ranges of x and y
-  if (x >= 0 && x < CLOCK_WIDTH && y >= 0 && y < CLOCK_HEIGHT) {
+  if (x >= 0 && x < clockWidth && y >= 0 && y < clockHeight) {
     leds[x][y] = type;
   }
 }
@@ -29,8 +29,8 @@ void LEDMatrix::setPixelType(uint8_t x, uint8_t y, enum LED_TYPE type) {
  */
 void LEDMatrix::clear(void) {
   // set a zero to each pixel
-  for (uint8_t i = 0; i < CLOCK_WIDTH; i++) {
-    for (uint8_t j = 0; j < CLOCK_HEIGHT; j++) {
+  for (uint8_t i = 0; i < clockWidth; i++) {
+    for (uint8_t j = 0; j < clockHeight; j++) {
       leds[i][j] = OFF;
     }
   }
@@ -41,8 +41,8 @@ void LEDMatrix::clear(void) {
  */
 void LEDMatrix::draw() {
   // loop over all leds in matrix
-  for (int row = 0; row < CLOCK_WIDTH; row++) {
-    for (int col = 0; col < CLOCK_HEIGHT; col++) {
+  for (int row = 0; row < clockWidth; row++) {
+    for (int col = 0; col < clockHeight; col++) {
       uint32_t color;
       switch (leds[row][col]) {
         case OFF:
@@ -54,16 +54,19 @@ void LEDMatrix::draw() {
         case NAME:
           color = color_NAME;
           break;
+        case ICON:
+          color = color_ICON;
+          break;
         case OTHER:
           color = GREEN;
           break;
       }
       uint16_t n;
 
-      (*pixels).setPixelColor(pixelIndex(row, col), color);
+      pixels->setPixelColor(pixelIndex(row, col), color);
     }
   }
-  (*pixels).show();
+  pixels->show();
 }
 
 /**
@@ -89,8 +92,8 @@ void LEDMatrix::print(const byte* drawing, uint8_t xpos, uint8_t ypos, enum LED_
 uint16_t LEDMatrix::pixelIndex(uint8_t row, uint8_t col) {
   if (row % 2) {
     // Odd row, right to left
-    return row * CLOCK_WIDTH + (CLOCK_WIDTH - 1 - col);
+    return row * clockWidth + (clockWidth - 1 - col);
   }
   // Even row, left to right
-  return row * CLOCK_WIDTH + col;
+  return row * clockWidth + col;
 }

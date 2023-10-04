@@ -29,13 +29,13 @@ uint8_t VERSION = {
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
 long lastReadTime = 0, lastCheckUpdate = 0, lastStoreColors = 0;
-bool storeColorTime = false, storeColorName = false;
+bool storeColorTime = false, storeColorName = false, storeColorIcon = false;
 WiFiManager wifiManager;
 UDPLogger logger;
 DS3231 rtc;
 esp8266FOTA FOTA("wordclock", VERSION);
-Adafruit_NeoPixel pixels(NUM_PIXELS, NEOPIXEL_PIN);
-LEDMatrix matrix(&pixels);
+Adafruit_NeoPixel* pixels;
+LEDMatrix* matrix;
 ESP8266WebServer server(80);
 
 // ----------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ void setup() {
   setupPersistentVars();
   setupFileSystem();
   setupTime();
-  setupPixels();
+  setupPixels(true);
   setupWifiManager();
 }
 
@@ -102,6 +102,10 @@ void loop() {
       EEPROM.put(ADR_COLOR_NAME, color_NAME);
       storeColorName = false;
     }
+    if (storeColorIcon) {
+      EEPROM.put(ADR_COLOR_ICON, color_ICON);
+      storeColorIcon = false;
+    }
     EEPROM.commit();
   }
 
@@ -124,20 +128,23 @@ void setupFileSystem() {
   if (!LittleFS.begin()) {
     Serial.println("LittleFS Mount Failed");
   }
-  // clockLayout = load_from_file("clock_layout.txt");
 }
 
-void setupPixels() {
-  pixels.begin();
-  pixels.setBrightness(brightness);
-  pixels.clear();
-  for (int i = 0; i < NUM_PIXELS; i++) {
-    uint16_t hue = (i * 65536) / NUM_PIXELS;
-    uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
-    color = pixels.gamma32(color);
-    pixels.setPixelColor(i, color);
-    pixels.show();
-    delay(20);
+void setupPixels(bool showAnimation) {
+  pixels = new Adafruit_NeoPixel((clockWidth * clockHeight), NEOPIXEL_PIN);
+  matrix = new LEDMatrix(pixels);
+  pixels->begin();
+  pixels->setBrightness(brightness);
+  if (showAnimation) {
+    pixels->clear();
+    for (int i = 0; i < (clockWidth * clockHeight); i++) {
+      uint16_t hue = (i * 65536) / (clockWidth * clockHeight);
+      uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
+      color = pixels->gamma32(color);
+      pixels->setPixelColor(i, color);
+      pixels->show();
+      delay(20);
+    }
   }
 }
 
@@ -147,6 +154,18 @@ void setupPersistentVars() {
 
   // Uncomment and run it once, if you want to erase stored info
   // resetEEPROM();
+
+  EEPROM.get(ADR_CLOCK_WIDTH, clockWidth);
+  EEPROM.get(ADR_CLOCK_HEIGHT, clockHeight);
+  clockLayout = "";
+  if (!clockWidth || !clockHeight) {
+    clockWidth = 1;
+    clockHeight = 1;
+  } else {
+    for (int i = 0; i < (clockWidth * clockHeight); ++i) {
+      clockLayout += char(EEPROM.read(ADR_CLOCK_LAYOUT + i));
+    }
+  }
 
   EEPROM.get(ADR_MODE, mode);
 
@@ -162,6 +181,10 @@ void setupPersistentVars() {
   EEPROM.get(ADR_COLOR_NAME, color_NAME);
   if (!color_NAME) {
     color_NAME = WHITE;
+  }
+  EEPROM.get(ADR_COLOR_ICON, color_ICON);
+  if (!color_ICON) {
+    color_ICON = WHITE;
   }
 
   EEPROM.get(ADR_BRIGHTNESS, brightness);
@@ -192,8 +215,8 @@ void setNightMode(int timeInMinutes) {
     nightMode = checkNightMode && timeInMinutes >= nightModeStartTime && timeInMinutes < nightModeEndTime;
   }
   if (nightMode) {
-    matrix.clear();
-    matrix.draw();
+    matrix->clear();
+    matrix->draw();
   }
 }
 
@@ -257,8 +280,8 @@ void checkWifiDisconnect() {
     if (WiFi.status() != WL_CONNECTED) {
       print("no wifi connection..");
       if (!nightMode) {
-        pixels.setPixelColor(100, pixels.Color(255, 0, 0, 0));
-        pixels.show();
+        pixels->setPixelColor(100, pixels->Color(255, 0, 0, 0));
+        pixels->show();
       }
     } else if (WiFi.localIP().toString() == "0.0.0.0") {
       // detected bug: ESP8266 - WiFi status not changing
@@ -274,20 +297,20 @@ void printIP() {
   print(WiFi.localIP().toString());
   uint8_t address = WiFi.localIP()[3];
   pauseTimer(&lastReadTime, 10000);
-  matrix.clear();
-  matrix.print(FONT_I, 1, 0, LEDMatrix::OTHER);
-  matrix.print(FONT_P, 5, 0, LEDMatrix::OTHER);
+  matrix->clear();
+  matrix->print(FONT_I, 1, 0, LEDMatrix::OTHER);
+  matrix->print(FONT_P, 5, 0, LEDMatrix::OTHER);
   uint8_t x = 0;
   if (address / 100 != 0) {
-    matrix.print(FONT_NUMBERS[(address / 100)], x, 6, LEDMatrix::OTHER);
+    matrix->print(FONT_NUMBERS[(address / 100)], x, 6, LEDMatrix::OTHER);
     x += 4;
   }
   if ((address / 10) % 10 != 0) {
-    matrix.print(FONT_NUMBERS[(address / 10) % 10], x, 6, LEDMatrix::OTHER);
+    matrix->print(FONT_NUMBERS[(address / 10) % 10], x, 6, LEDMatrix::OTHER);
     x += 4;
   }
-  matrix.print(FONT_NUMBERS[address % 10], x, 6, LEDMatrix::OTHER);
-  matrix.draw();
+  matrix->print(FONT_NUMBERS[address % 10], x, 6, LEDMatrix::OTHER);
+  matrix->draw();
 }
 
 void onWifiConnect() {
@@ -301,28 +324,6 @@ void onWifiConnect() {
 /***************************************************************
  *                    Over-the-Air Updates
  ***************************************************************/
-void onUpdateProgress(unsigned int progress, unsigned int total) {
-  print("Progress: " + String(progress / (total / 100)));
-  if (!nightMode) {
-    pixels.clear();
-    for (int i = 0; i < progress / (total / NUM_PIXELS); i++) {
-      int row = i / CLOCK_WIDTH;
-      pixels.setPixelColor(row % 2 ? row * CLOCK_WIDTH + ((row + 1) * CLOCK_WIDTH - i - 1) : i, pixels.Color(0, 0, 255));
-    }
-    pixels.show();
-  }
-}
-void onUpdateFinished() {
-  if (!nightMode) {
-    pixels.clear();
-    for (int i = 0; i < NUM_PIXELS; i++) {
-      pixels.setPixelColor(i, pixels.Color(0, 255, 0));
-    }
-    pixels.show();
-  }
-  delay(200);
-}
-
 void setupOTA() {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
@@ -333,6 +334,28 @@ void setupOTA() {
   ArduinoOTA.onEnd(onUpdateFinished);
 }
 
+void onUpdateProgress(unsigned int progress, unsigned int total) {
+  print("Progress: " + String(progress / (total / 100)));
+  if (!nightMode) {
+    pixels->clear();
+    for (int i = 0; i < progress / (total / (clockWidth * clockHeight)); i++) {
+      int row = i / clockWidth;
+      pixels->setPixelColor(row % 2 ? row * clockWidth + ((row + 1) * clockWidth - i - 1) : i, pixels->Color(0, 0, 255));
+    }
+    pixels->show();
+  }
+}
+
+void onUpdateFinished() {
+  if (!nightMode) {
+    pixels->clear();
+    for (int i = 0; i < (clockWidth * clockHeight); i++) {
+      pixels->setPixelColor(i, pixels->Color(0, 255, 0));
+    }
+    pixels->show();
+  }
+  delay(200);
+}
 
 /***************************************************************
  *                       Time
@@ -368,12 +391,12 @@ void setupTime() {
 }
 
 void showDigitalTime(int hours, int minutes) {
-  matrix.clear();
-  matrix.print(FONT_NUMBERS[(hours / 10)], 3, 0, LEDMatrix::TIME);
-  matrix.print(FONT_NUMBERS[(hours % 10)], 7, 0, LEDMatrix::TIME);
-  matrix.print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
-  matrix.print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
-  matrix.draw();
+  matrix->clear();
+  matrix->print(FONT_NUMBERS[(hours / 10)], 3, 0, LEDMatrix::TIME);
+  matrix->print(FONT_NUMBERS[(hours % 10)], 7, 0, LEDMatrix::TIME);
+  matrix->print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
+  matrix->print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
+  matrix->draw();
 }
 
 void showTimeString(String timeString) {
@@ -387,7 +410,7 @@ void showTimeString(String timeString) {
   // add space on the end of timeString for splitting
   timeString = timeString + " ";
 
-  matrix.clear();
+  matrix->clear();
 
   while (true) {
     // extract next word from timeString
@@ -400,9 +423,9 @@ void showTimeString(String timeString) {
       if (positionOfWord >= 0) {
         // word found on clock
         for (int i = 0; i < word.length(); i++) {
-          int row = (positionOfWord + i) / CLOCK_WIDTH;
-          int col = (positionOfWord + i) % CLOCK_WIDTH;
-          matrix.setPixelType(row, col, LEDMatrix::TIME);
+          int row = (positionOfWord + i) / clockWidth;
+          int col = (positionOfWord + i) % clockWidth;
+          matrix->setPixelType(row, col, LEDMatrix::TIME);
         }
         lastLetterClock = positionOfWord + word.length();
       } else {
@@ -416,12 +439,16 @@ void showTimeString(String timeString) {
   }
   for (int i = 0; i < clockLayout.length(); i++) {
     if (clockLayout.charAt(i) == '*') {
-      int row = i / CLOCK_WIDTH;
-      int col = i % CLOCK_WIDTH;
-      matrix.setPixelType(row, col, LEDMatrix::NAME);
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::NAME);
+    } else if (clockLayout.charAt(i) == '&') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::ICON);
     }
   }
-  matrix.draw();
+  matrix->draw();
 }
 
 /**
@@ -497,8 +524,14 @@ void setupServer() {
     server.sendHeader("Access-Control-Allow-Headers", "*");
     server.send(204);
   });
+  server.on("/api/admin/settings", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
   server.on("/api/settings", HTTP_GET, getSettings);
   server.on("/api/settings", HTTP_POST, saveSettings);
+  server.on("/api/admin/settings", HTTP_POST, saveAdminSettings);
+
   server.on("/api/color", HTTP_POST, setColor);
   server.on("/api/color", HTTP_GET, getColor);
   server.on("/api/mode", HTTP_POST, setMode);
@@ -506,7 +539,7 @@ void setupServer() {
 }
 
 bool getSettings() {
-  server.send(200, "application/json", "{\"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + "}");
+  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
   return true;
 }
 
@@ -551,11 +584,14 @@ bool setColor() {
   } else if (server.arg("type") == "name") {
     color_NAME = color;
     storeColorName = true;
+  } else if (server.arg("type") == "icon") {
+    color_ICON = color;
+    storeColorIcon = true;
   } else {
     server.send(400, "application/json", "Color type unknown");
     return false;
   }
-  matrix.draw();
+  matrix->draw();
 
   server.send(200, "application/json", server.arg("plain"));
   return true;
@@ -566,11 +602,46 @@ bool getColor() {
     color = color_TIME;
   } else if (server.arg("type") == "name") {
     color = color_NAME;
+  } else if (server.arg("type") == "icon") {
+    color = color_ICON;
   } else {
     server.send(400, "application/json", "Color type unknown");
     return false;
   }
   server.send(200, "application/json", (String)color);
+  return true;
+}
+
+bool saveAdminSettings() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  StaticJsonDocument<500> JSONDocument;
+  DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
+  if (err) { //Check for errors in parsing
+    server.send(400, "application/json", "Body could not be parsed");
+    return false;
+  }
+
+  if (JSONDocument["clock_width"] > 0 && JSONDocument["clock_width"] <= 20 &&
+    JSONDocument["clock_height"] > 0 && JSONDocument["clock_height"] <= 20) {
+    clockWidth = JSONDocument["clock_width"];
+    clockHeight = JSONDocument["clock_height"];
+    EEPROM.put(ADR_CLOCK_WIDTH, clockWidth);
+    EEPROM.put(ADR_CLOCK_HEIGHT, clockHeight);
+    if (JSONDocument["clock_layout"]) {
+      clockLayout = String(JSONDocument["clock_layout"]);
+      for (int i = 0; i < clockLayout.length(); ++i) {
+        EEPROM.write(ADR_CLOCK_LAYOUT + i, clockLayout.charAt(i));
+      }
+    }
+    EEPROM.commit();
+    setupPixels(false);
+  }
+
+  server.send(200, "application/json", server.arg("plain"));
   return true;
 }
 
@@ -588,7 +659,7 @@ bool saveSettings() {
   }
   if (JSONDocument["brightness"] >= 10 && JSONDocument["brightness"] <= 255) {
     brightness = JSONDocument["brightness"];
-    pixels.setBrightness(brightness);
+    pixels->setBrightness(brightness);
     EEPROM.put(ADR_BRIGHTNESS, brightness);
   }
   checkNightMode = JSONDocument["nm"];
@@ -608,7 +679,7 @@ bool saveSettings() {
     EEPROM.put(ADR_NM_END_M, nightModeEndMin);
   }
   EEPROM.commit();
-  matrix.draw();
+  matrix->draw();
   server.send(200, "application/json", server.arg("plain"));
   return true;
 }

@@ -58,7 +58,7 @@
         <form @submit.prevent="saveSettings" class="settings" :class="{'show': showSettings}">
           <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
             <label for="brightness" class="is-flex-grow-1">Brightness:</label>
-            <input v-model="brightness" type="range" id="brightness" name="volume" min="10" max="255">
+            <input v-model="brightness" type="range" id="brightness" name="brightness" min="10" max="255">
           </div>
           <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
             <label for="nm" class="is-flex-grow-1">Nightmode: </label>
@@ -75,6 +75,9 @@
               <input :required="nm" v-model="nm_end" :disabled="!nm" type="time" id="nm_end" name="nm_end" min="00:00" max="23:59">
             </div>
           </div>
+          <small class="is-pulled-left mt-3">
+            Firmware Version: <b>{{version}}</b>
+          </small>
           <div class="has-text-right mt-2">
             <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
           </div>
@@ -96,7 +99,8 @@
         <div class="tabs is-centered is-medium">
           <ul>
             <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
-            <li :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam</a></li>
+            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam</a></li>
+            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Icon</a></li>
           </ul>
         </div>
         <div id="picker" v-show="!loading" class="mt-6"></div>
@@ -134,6 +138,10 @@
         const nm_end = ref();
         const nm_start = ref();
         const mode = ref();
+        const clockWidth = ref();
+        const clockHeight = ref();
+        const clockLayout = ref();
+        const version = ref();
         const getSettings = async () => {
           try {
             loadingSettings.value = true;
@@ -141,6 +149,10 @@
             const result = await response.json();
             brightness.value = result.brightness;
             mode.value = result.mode;
+            clockWidth.value = result.clock_width;
+            clockHeight.value = result.clock_height;
+            clockLayout.value = result.clock_layout;
+            version.value = result.version;
             nm.value = !!result.nm;
             nm_start.value = result.nm_start_h.toString().padStart(2, '0') + ":" + result.nm_start_m.toString().padStart(2, '0');
             nm_end.value = result.nm_end_h.toString().padStart(2, '0') + ":" + result.nm_end_m.toString().padStart(2, '0');
@@ -262,7 +274,11 @@
           loadingSettings,
           saveSettings,
           mode,
-          setMode
+          setMode,
+          clockWidth,
+          clockHeight,
+          clockLayout,
+          version
         }
       }
     }).mount('#app')

@@ -4,35 +4,34 @@
 // ----------------------------------------------------------------------------------
 //                                   CONSTANTS
 // ----------------------------------------------------------------------------------
-#define PERIOD_READTIME 1000
-#define PERIOD_CHECK_UPDATE 300000
-#define PERIOD_STORE_COLORS 60000
-#define PERIOD_NTP_UPDATE 60000
-#define AP_SSID "JouwWoordklok"
-#define HOSTNAME "jouwwoordklok"
-#define TIMEZONE TZ_Europe_Amsterdam
-#define AUTO_UPDATE true
+#define PERIOD_READTIME 1000                // how often to read and update the time
+#define PERIOD_CHECK_UPDATE 60 * 60 * 1000  // how often to check for updates
+#define PERIOD_STORE_COLORS 60 * 1000       // how long to wait before storing a color in EEPROM
+#define PERIOD_NTP_UPDATE 60 * 1000         // how often to sync time with NTP server
+#define AP_SSID "JouwWoordklok"             // WiFi Name when setting up clock
+#define HOSTNAME "jouwwoordklok"            // Hostname of clock
+#define TIMEZONE TZ_Europe_Amsterdam        // local timezone to account for DST
+#define AUTO_UPDATE true                    // automatically pull firmware and filesystem updates from remote server
+#define NEOPIXEL_PIN 0                      // pin to which the NeoPixels are attached
 
 // EEPROM to save persistent variables
-#define ADR_RTC_SET 0 // bool
-#define ADR_MODE sizeof(bool) // enum MODE
-#define ADR_COLOR_TIME ADR_MODE + sizeof(MODE) // uint32_t
-#define ADR_COLOR_NAME (ADR_COLOR_TIME + sizeof(uint32_t)) // uint32_t
-#define ADR_COLOR_ICON (ADR_COLOR_NAME + sizeof(uint32_t)) // uint32_t
-#define ADR_BRIGHTNESS (ADR_COLOR_ICON + sizeof(uint32_t)) // uint8_t
-#define ADR_NM (ADR_BRIGHTNESS + sizeof(uint8_t)) // bool
-#define ADR_NM_START_H (ADR_NM + sizeof(bool)) // uint8_t
-#define ADR_NM_END_H (ADR_NM_START_H + sizeof(uint8_t)) // uint8_t
-#define ADR_NM_START_M (ADR_NM_END_H + sizeof(uint8_t)) // uint8_t
-#define ADR_NM_END_M (ADR_NM_START_M + sizeof(uint8_t)) // uint8_t
+#define ADR_RTC_SET       0                                       // bool
+#define ADR_MODE          sizeof(bool)                            // enum MODE
+#define ADR_COLOR_TIME    (ADR_MODE + sizeof(MODE))               // uint32_t
+#define ADR_COLOR_NAME    (ADR_COLOR_TIME + sizeof(uint32_t))     // uint32_t
+#define ADR_COLOR_ICON    (ADR_COLOR_NAME + sizeof(uint32_t))     // uint32_t
+#define ADR_BRIGHTNESS    (ADR_COLOR_ICON + sizeof(uint32_t))     // uint8_t
+#define ADR_NM            (ADR_BRIGHTNESS + sizeof(uint8_t))      // bool
+#define ADR_NM_START_H    (ADR_NM + sizeof(bool))                 // uint8_t
+#define ADR_NM_END_H      (ADR_NM_START_H + sizeof(uint8_t))      // uint8_t
+#define ADR_NM_START_M    (ADR_NM_END_H + sizeof(uint8_t))        // uint8_t
+#define ADR_NM_END_M      (ADR_NM_START_M + sizeof(uint8_t))      // uint8_t
+#define ADR_CLOCK_WIDTH   (ADR_NM_END_M + sizeof(uint8_t))        // uint8_t
+#define ADR_CLOCK_HEIGHT  (ADR_CLOCK_WIDTH + sizeof(uint8_t))     // uint8_t
+#define ADR_CLOCK_LAYOUT  (ADR_CLOCK_HEIGHT + sizeof(uint8_t))    // 20 * 20 char
 
-#define EEPROM_SIZE (ADR_NM_END_M + sizeof(uint8_t)) 
+#define EEPROM_SIZE       (ADR_CLOCK_LAYOUT + (sizeof(char) * 20 * 20))
 
-#define CLOCK_WIDTH 13
-#define CLOCK_HEIGHT 13
-#define NUM_PIXELS (CLOCK_WIDTH * CLOCK_HEIGHT)
-
-#define NEOPIXEL_PIN 0 // pin to which the NeoPixels are attached
 
 // ----------------------------------------------------------------------------------
 //                              FUNCTIONS & VARS
@@ -50,26 +49,11 @@ inline uint8_t nightModeStartHour;
 inline uint8_t nightModeStartMin;
 inline uint8_t nightModeEndHour;
 inline uint8_t nightModeEndMin;
+inline uint8_t clockWidth;
+inline uint8_t clockHeight;
+inline String clockLayout;
 
 void print(String message, bool newline = true);
 void print(int number, bool newline = true);
-
-// ----------------------------------------------------------------------------------
-//                               WORDCLOCK LAYOUT
-// ----------------------------------------------------------------------------------
-const String clockLayout = "\
-HETVISNEENZES\
-TWEEDRIEZVIER\
-VIJFZEVENACHT\
-NEGEN-TIENELF\
-TWAALFDERTIEN\
-VEERTIENKWART\
-VOOROVERTHALF\
-EENXTWEENDRIE\
-VIERGVIJFNZES\
-KLZEVENMACHTR\
-FNEGENSTIENEE\
-TWAALFITOTV**\
-ELFLNUURDUS**";
 
 #endif
