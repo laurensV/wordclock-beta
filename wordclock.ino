@@ -135,8 +135,8 @@ void setupPixels(bool showAnimation) {
   matrix = new LEDMatrix(pixels);
   pixels->begin();
   pixels->setBrightness(brightness);
+  pixels->clear();
   if (showAnimation) {
-    pixels->clear();
     for (int i = 0; i < (clockWidth * clockHeight); i++) {
       uint16_t hue = (i * 65536) / (clockWidth * clockHeight);
       uint32_t color = Adafruit_NeoPixel::ColorHSV(hue);
@@ -158,9 +158,10 @@ void setupPersistentVars() {
   EEPROM.get(ADR_CLOCK_WIDTH, clockWidth);
   EEPROM.get(ADR_CLOCK_HEIGHT, clockHeight);
   clockLayout = "";
+
   if (!clockWidth || !clockHeight) {
-    clockWidth = 1;
-    clockHeight = 1;
+    clockWidth = 13;
+    clockHeight = 13;
   } else {
     for (int i = 0; i < (clockWidth * clockHeight); ++i) {
       clockLayout += char(EEPROM.read(ADR_CLOCK_LAYOUT + i));
@@ -629,10 +630,14 @@ bool saveAdminSettings() {
     JSONDocument["clock_height"] > 0 && JSONDocument["clock_height"] <= 20) {
     clockWidth = JSONDocument["clock_width"];
     clockHeight = JSONDocument["clock_height"];
+    print("setting clock width to ", false);print(clockWidth);
+    print("setting clock height to ", false);print(clockHeight);
     EEPROM.put(ADR_CLOCK_WIDTH, clockWidth);
     EEPROM.put(ADR_CLOCK_HEIGHT, clockHeight);
+    EEPROM.commit();
     if (JSONDocument["clock_layout"]) {
       clockLayout = String(JSONDocument["clock_layout"]);
+      print("setting clock layout to " + clockLayout);
       for (int i = 0; i < clockLayout.length(); ++i) {
         EEPROM.write(ADR_CLOCK_LAYOUT + i, clockLayout.charAt(i));
       }

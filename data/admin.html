@@ -100,7 +100,7 @@
               body: JSON.stringify({
                 clock_width: parseInt(clockWidth.value),
                 clock_height: parseInt(clockHeight.value),
-                clock_layout: clockLayout.value.join("")
+                clock_layout: clockLayout.value.slice(0, clockWidth.value*clockHeight.value).join("")
               })
             });
             const result = await response.json();
