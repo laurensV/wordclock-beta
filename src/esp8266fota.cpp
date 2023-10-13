@@ -199,7 +199,7 @@ bool esp8266FOTA::execHTTPcheck() {
             _bin = jsbin;
 
             String fwtype(pltype);
-            if (plversion > _firwmareVersion && fwtype == _firwmareType) {
+            if (_firwmareVersion && plversion > _firwmareVersion && fwtype == _firwmareType) {
                 _fsUpdate = false;
                 return true;
             } else if (fsversion > _filesystemVersion && fwtype == _firwmareType) {

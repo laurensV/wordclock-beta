@@ -141,6 +141,7 @@ void setupFileSystem() {
     Serial.println("LittleFS Mount Failed");
   }
   fileSystemVersion = (load_from_file("VERSION.txt")).toInt();
+  print("filesystem version: ", false); print(fileSystemVersion);
 }
 
 void setupPixels(bool showAnimation) {
