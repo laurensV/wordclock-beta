@@ -36,8 +36,8 @@
             </div>
           </div>
           <div>
-            Firmware Version: {{version}}<br>
-            Filesystem Version: {{fsversion}}
+            Firmware Version: v{{version}}<br>
+            Filesystem Version: v{{fsversion}}
           </div>
           <div class="has-text-right mt-2">
             <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
