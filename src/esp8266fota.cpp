@@ -4,9 +4,10 @@
 #include <WiFiClientSecure.h>
 #include "ArduinoJson.h"
 
-esp8266FOTA::esp8266FOTA(String firwmareType, int firwmareVersion) {
+esp8266FOTA::esp8266FOTA(String firwmareType, int firwmareVersion, int filesystemVersion) {
     _firwmareType = firwmareType;
     _firwmareVersion = firwmareVersion;
+    _filesystemVersion = filesystemVersion;
     useDeviceID = false;
 }
 
@@ -97,8 +98,12 @@ void esp8266FOTA::execOTA() {
 
     // check contentLength and content type
     if (contentLength && isValidContentType) {
+        int command = U_FLASH;
+        if (_fsUpdate) {
+            command = U_FS;
+        }
         // Check if there is enough to OTA Update
-        bool canBegin = Update.begin(contentLength);
+        bool canBegin = Update.begin(contentLength, command);
 
         // If yes, begin
         if (canBegin) {
@@ -179,22 +184,27 @@ bool esp8266FOTA::execHTTPcheck() {
             }
 
             const char* pltype = JSONDocument["type"];
-            int plversion = JSONDocument["version"];
+            int plversion = JSONDocument["firmware_version"];
+            int fsversion = JSONDocument["filesystem_version"];
             const char* plhost = JSONDocument["host"];
             _port = JSONDocument["port"];
             const char* plbin = JSONDocument["firmware"];
+            const char* fsbin = JSONDocument["filesystem"];
 
             String jshost(plhost);
             String jsbin(plbin);
+            String jsfsbin(fsbin);
 
             _host = jshost;
             _bin = jsbin;
 
             String fwtype(pltype);
-            print(_firwmareVersion);
-            print(plversion);
-            Serial.println(plversion);
             if (plversion > _firwmareVersion && fwtype == _firwmareType) {
+                _fsUpdate = false;
+                return true;
+            } else if (fsversion > _filesystemVersion && fwtype == _firwmareType) {
+                _fsUpdate = true;
+                _bin = jsfsbin;
                 return true;
             } else {
                 return false;

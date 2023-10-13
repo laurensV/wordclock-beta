@@ -21,22 +21,24 @@
 #include "src/esp8266fota.h"
 #include "src/ledmatrix.h"
 
-uint8_t VERSION = {
+int VERSION = {
 #include "VERSION.h"  
 };
 
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
-long lastReadTime = 0, lastCheckUpdate = 0, lastStoreColors = 0;
+long lastReadTime = 0, lastCheckUpdate = 0, lastStoreColors = 0, lastCheckNTP = 0;
 bool storeColorTime = false, storeColorName = false, storeColorIcon = false;
 WiFiManager wifiManager;
 UDPLogger logger;
 DS3231 rtc;
-esp8266FOTA FOTA("wordclock", VERSION);
+esp8266FOTA* FOTA;
+int fileSystemVersion;
 Adafruit_NeoPixel* pixels;
 LEDMatrix* matrix;
 ESP8266WebServer server(80);
+bool NTPWorking = true;
 
 // ----------------------------------------------------------------------------------
 //                                        SETUP
@@ -109,13 +111,23 @@ void loop() {
     EEPROM.commit();
   }
 
+  if (checkNTPInterval()) {
+    if (isWifiConnected()) {
+      if (!NTPWorking) {
+        print("NTP update not working, reconnecting WiFi..");
+        WiFi.reconnect();
+      }
+      NTPWorking = false;
+    }
+  }
+
   if (checkUpdateInterval() && AUTO_UPDATE) {
     if (isWifiConnected()) {
       print("checking for new updates..");
-      bool updatedNeeded = FOTA.execHTTPcheck();
+      bool updatedNeeded = FOTA->execHTTPcheck();
       if (updatedNeeded) {
         print("New update available!");
-        FOTA.execOTA();
+        FOTA->execOTA();
       } else {
         print("Already running latest version");
       }
@@ -128,6 +140,7 @@ void setupFileSystem() {
   if (!LittleFS.begin()) {
     Serial.println("LittleFS Mount Failed");
   }
+  fileSystemVersion = (load_from_file("VERSION.txt")).toInt();
 }
 
 void setupPixels(bool showAnimation) {
@@ -243,6 +256,12 @@ bool readTimeInterval() {
   return interval;
 }
 
+bool checkNTPInterval() {
+  bool interval = (long)millis() - lastCheckNTP > PERIOD_NTP_CHECK;
+  if (interval) lastCheckNTP = millis();
+  return interval;
+}
+
 bool checkUpdateInterval() {
   bool interval = (long)millis() - lastCheckUpdate > PERIOD_CHECK_UPDATE;
   if (interval) lastCheckUpdate = millis();
@@ -328,9 +347,10 @@ void onWifiConnect() {
 void setupOTA() {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
-  FOTA.checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
-  FOTA.onProgress(onUpdateProgress);
-  FOTA.onEnd(onUpdateFinished);
+  FOTA = new esp8266FOTA("wordclock", VERSION, fileSystemVersion);
+  FOTA->checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
+  FOTA->onProgress(onUpdateProgress);
+  FOTA->onEnd(onUpdateFinished);
   ArduinoOTA.onProgress(onUpdateProgress);
   ArduinoOTA.onEnd(onUpdateFinished);
 }
@@ -490,6 +510,7 @@ String timeToString(uint8_t hours, uint8_t minutes) {
 // NTP functions
 void time_set(bool from_sntp) {
   if (from_sntp) {
+    NTPWorking = true;
     print("System time updated from NTP server");
     // Update RTC if time came from NTP server
     rtc.setEpoch(time(nullptr));
@@ -540,7 +561,7 @@ void setupServer() {
 }
 
 bool getSettings() {
-  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
+  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
   return true;
 }
 

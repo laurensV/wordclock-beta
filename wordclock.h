@@ -4,15 +4,16 @@
 // ----------------------------------------------------------------------------------
 //                                   CONSTANTS
 // ----------------------------------------------------------------------------------
-#define PERIOD_READTIME 1000                // how often to read and update the time
-#define PERIOD_CHECK_UPDATE 60 * 60 * 1000  // how often to check for updates
-#define PERIOD_STORE_COLORS 60 * 1000       // how long to wait before storing a color in EEPROM
-#define PERIOD_NTP_UPDATE 60 * 1000         // how often to sync time with NTP server
-#define AP_SSID "JouwWoordklok"             // WiFi Name when setting up clock
-#define HOSTNAME "jouwwoordklok"            // Hostname of clock
-#define TIMEZONE TZ_Europe_Amsterdam        // local timezone to account for DST
-#define AUTO_UPDATE true                    // automatically pull firmware and filesystem updates from remote server
-#define NEOPIXEL_PIN 0                      // pin to which the NeoPixels are attached
+#define PERIOD_READTIME 1000                  // how often to read and update the time
+#define PERIOD_CHECK_UPDATE 60 * 1000    // how often to check for updates
+#define PERIOD_STORE_COLORS 60 * 1000         // how long to wait before storing a color in EEPROM
+#define PERIOD_NTP_UPDATE 60 * 1000           // how often to sync time with NTP server
+#define PERIOD_NTP_CHECK PERIOD_NTP_UPDATE*3  // check if NTP is still responding
+#define AP_SSID "JouwWoordklok"               // WiFi Name when setting up clock
+#define HOSTNAME "jouwwoordklok"              // Hostname of clock
+#define TIMEZONE TZ_Europe_Amsterdam          // local timezone to account for DST
+#define AUTO_UPDATE true                      // automatically pull firmware and filesystem updates from remote server
+#define NEOPIXEL_PIN 0                        // pin to which the NeoPixels are attached
 
 // EEPROM to save persistent variables
 #define ADR_RTC_SET       0                                       // bool

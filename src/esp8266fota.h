@@ -8,7 +8,7 @@ class esp8266FOTA {
 public:
   typedef std::function<void(unsigned int, unsigned int)> THandlerFunction_Progress;
   typedef std::function<void(void)> THandlerFunction;
-  esp8266FOTA(String firwmareType, int firwmareVersion);
+  esp8266FOTA(String firwmareType, int firwmareVersion, int filesystemVersion);
   bool forceUpdate(String firwmareHost, int firwmarePort, String firwmarePath);
   void execOTA();
   bool execHTTPcheck();
@@ -26,6 +26,8 @@ private:
   String getDeviceID();
   String _firwmareType;
   int _firwmareVersion;
+  int _filesystemVersion;
+  bool _fsUpdate;
   String _host;
   String _bin;
   int _port;
