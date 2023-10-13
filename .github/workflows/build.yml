@@ -28,7 +28,7 @@ jobs:
       run: |
         wget https://github.com/earlephilhower/mklittlefs/releases/download/3.2.0/x86_64-linux-gnu-mklittlefs-975bd0f.tar.gz
         tar -xvf x86_64-linux-gnu-mklittlefs-975bd0f.tar.gz
-        mklittlefs/mklittlefs -c ./data -p 256 -b 8192 -s 512000 filesystem.bin 
+        mklittlefs/mklittlefs -c ./data -p 256 -b 8192 -s 2024000 filesystem.bin 
         mklittlefs/mklittlefs -l filesystem.bin -b 8192
         mv filesystem.bin firmware/
     - name: Update version

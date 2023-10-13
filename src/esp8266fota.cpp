@@ -3,6 +3,7 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include "ArduinoJson.h"
+#include "LittleFS.h"
 
 esp8266FOTA::esp8266FOTA(String firwmareType, int firwmareVersion, int filesystemVersion) {
     _firwmareType = firwmareType;
@@ -100,6 +101,8 @@ void esp8266FOTA::execOTA() {
     if (contentLength && isValidContentType) {
         int command = U_FLASH;
         if (_fsUpdate) {
+            LittleFS.end();
+            // contentLength = ((size_t)&_FS_end - (size_t)&_FS_start);
             command = U_FS;
         }
         // Check if there is enough to OTA Update
