@@ -5,7 +5,7 @@
 //                                   CONSTANTS
 // ----------------------------------------------------------------------------------
 #define PERIOD_READTIME 1000                  // how often to read and update the time
-#define PERIOD_CHECK_UPDATE 60 * 2 * 1000    // how often to check for updates
+#define PERIOD_CHECK_UPDATE 60 * 30 * 1000    // how often to check for updates
 #define PERIOD_STORE_COLORS 60 * 1000         // how long to wait before storing a color in EEPROM
 #define PERIOD_NTP_UPDATE 60 * 1000           // how often to sync time with NTP server
 #define PERIOD_NTP_CHECK PERIOD_NTP_UPDATE*3  // check if NTP is still responding
