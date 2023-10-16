@@ -114,8 +114,9 @@ void loop() {
   if (checkNTPInterval()) {
     if (isWifiConnected()) {
       if (!NTPWorking) {
-        print("NTP update not working, reconnecting WiFi..");
-        WiFi.reconnect();
+        print("NTP update not working, restarting..");
+        // WiFi.reconnect();
+        ESP.restart();
       }
       NTPWorking = false;
     }
@@ -483,7 +484,7 @@ void showTimeString(String timeString) {
 String timeToString(uint8_t hours, uint8_t minutes) {
   String message = "HET IS ";
 
-  String minuteWords[] = { "EEN", "TWEE", "DRIE", "VIER", "VIJF", "ZES", "ZEVEN", "ACHT", "NEGEN", "TIEN", "ELF", "TWAALF", "DERTIEN", "VEERTIEN", "KWART", "ZES -TIEN", "ZEVEN -TIEN", "ACHT -TIEN", "NEGEN-TIEN" };
+  String minuteWords[] = { "EEN", "TWEE", "DRIE", "VIER", "VIJF", "ZES", "ZEVEN", "ACHT", "NEGEN", "TIEN", "ELF", "TWAALF", "DERTIEN", "VEERTIEN", "KWART", "ZES TIEN", "ZEVEN TIEN", "ACHT TIEN", "NEGEN TIEN" };
   //show minutes
   if (minutes > 0 && minutes < 20) {
     message += minuteWords[minutes - 1] + " OVER ";
