@@ -43,8 +43,8 @@
           </div>
           <div class="field is-grouped mt-2">
             <p class="control">
-              <a :class="{'is-loading': loadingSettings}" @click="resetAll" class="button is-inverted is-danger" disabled>
-                Reset ALL
+              <a :class="{'is-loading': loadingSettings}" @click="resetSettings" class="button is-inverted is-danger" disabled>
+                Reset Settings
               </a>
             </p>
             <p class="control">
@@ -142,11 +142,11 @@
           }
           loadingSettings.value = false;
         }
-        const resetAll = async () => {
+        const resetSettings = async () => {
           try {
             loadingSettings.value = true;
             if (confirm("Are you sure you want to reset all settings (including clock layout)?")) {
-              const response = await fetch(baseUrl + '/api/admin/reset-all');
+              const response = await fetch(baseUrl + '/api/admin/reset-settings');
               const result = await response.json();
               alert('Restarting wordclock..');
             }
@@ -162,7 +162,7 @@
           loadingSettings,
           saveAdminSettings,
           resetWifi,
-          resetAll,
+          resetSettings,
           clockWidth,
           clockHeight,
           clockLayout,
