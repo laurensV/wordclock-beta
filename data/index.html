@@ -217,13 +217,13 @@
                   {
                     component: iro.ui.Wheel,
                   },
-                  // { 
-                  //   component: window.iro.ui.Slider,
-                  //   options: {
-                  //     // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
-                  //     sliderType: 'saturation'
-                  //   }
-                  // },
+                  { 
+                    component: window.iro.ui.Slider,
+                    options: {
+                      // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
+                      sliderType: 'value'
+                    }
+                  },
                 ]
               });
               colorPicker.on('color:change', throttle(async function (color) {
