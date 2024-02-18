@@ -413,12 +413,27 @@ void setupTime() {
   settimeofday_cb(time_set);
 }
 
+void showName() {
+  for (int i = 0; i < clockLayout.length(); i++) {
+    if (clockLayout.charAt(i) == '*') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::NAME);
+    } else if (clockLayout.charAt(i) == '&') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::ICON);
+    }
+  }
+}
+
 void showDigitalTime(int hours, int minutes) {
   matrix->clear();
   matrix->print(FONT_NUMBERS[(hours / 10)], 3, 0, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(hours % 10)], 7, 0, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
+  showName();
   matrix->draw();
 }
 
@@ -460,17 +475,7 @@ void showTimeString(String timeString) {
       break;
     }
   }
-  for (int i = 0; i < clockLayout.length(); i++) {
-    if (clockLayout.charAt(i) == '*') {
-      int row = i / clockWidth;
-      int col = i % clockWidth;
-      matrix->setPixelType(row, col, LEDMatrix::NAME);
-    } else if (clockLayout.charAt(i) == '&') {
-      int row = i / clockWidth;
-      int col = i % clockWidth;
-      matrix->setPixelType(row, col, LEDMatrix::ICON);
-    }
-  }
+  showName();
   matrix->draw();
 }
 
