@@ -555,11 +555,25 @@ void setupServer() {
   server.on("/api/settings", HTTP_GET, getSettings);
   server.on("/api/settings", HTTP_POST, saveSettings);
   server.on("/api/admin/settings", HTTP_POST, saveAdminSettings);
+  server.on("/api/admin/reset-wifi", HTTP_GET, resetWifi);
+  server.on("/api/admin/reset-all", HTTP_GET, resetAll);
 
   server.on("/api/color", HTTP_POST, setColor);
   server.on("/api/color", HTTP_GET, getColor);
   server.on("/api/mode", HTTP_POST, setMode);
   server.begin();
+}
+
+void resetWifi() {
+  wifiManager.resetSettings();
+  server.send(200, "application/json");
+  ESP.restart();
+}
+void resetAll() {
+  wifiManager.resetSettings();
+  resetEEPROM();
+  server.send(200, "application/json");
+  ESP.restart();
 }
 
 bool getSettings() {
