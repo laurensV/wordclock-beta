@@ -413,12 +413,27 @@ void setupTime() {
   settimeofday_cb(time_set);
 }
 
+void showName() {
+  for (int i = 0; i < clockLayout.length(); i++) {
+    if (clockLayout.charAt(i) == '*') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::NAME);
+    } else if (clockLayout.charAt(i) == '&') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::ICON);
+    }
+  }
+}
+
 void showDigitalTime(int hours, int minutes) {
   matrix->clear();
   matrix->print(FONT_NUMBERS[(hours / 10)], 3, 0, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(hours % 10)], 7, 0, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
+  showName();
   matrix->draw();
 }
 
@@ -460,17 +475,7 @@ void showTimeString(String timeString) {
       break;
     }
   }
-  for (int i = 0; i < clockLayout.length(); i++) {
-    if (clockLayout.charAt(i) == '*') {
-      int row = i / clockWidth;
-      int col = i % clockWidth;
-      matrix->setPixelType(row, col, LEDMatrix::NAME);
-    } else if (clockLayout.charAt(i) == '&') {
-      int row = i / clockWidth;
-      int col = i % clockWidth;
-      matrix->setPixelType(row, col, LEDMatrix::ICON);
-    }
-  }
+  showName();
   matrix->draw();
 }
 
@@ -540,6 +545,10 @@ void setupServer() {
     server.sendHeader("Access-Control-Allow-Headers", "*");
     server.send(204);
   });
+  server.on("/api/brightness", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
   server.on("/api/color", HTTP_OPTIONS, []() {
     server.sendHeader("Access-Control-Allow-Headers", "*");
     server.send(204);
@@ -555,11 +564,28 @@ void setupServer() {
   server.on("/api/settings", HTTP_GET, getSettings);
   server.on("/api/settings", HTTP_POST, saveSettings);
   server.on("/api/admin/settings", HTTP_POST, saveAdminSettings);
+  server.on("/api/admin/reset-wifi", HTTP_GET, resetWifi);
+  server.on("/api/admin/reset-settings", HTTP_GET, resetSettings);
 
   server.on("/api/color", HTTP_POST, setColor);
+  server.on("/api/brightness", HTTP_POST, setBrightness);
   server.on("/api/color", HTTP_GET, getColor);
+  server.on("/api/brightness", HTTP_GET, getBrightness);
   server.on("/api/mode", HTTP_POST, setMode);
   server.begin();
+}
+
+void resetWifi() {
+  wifiManager.resetSettings();
+  server.send(200, "application/json", "\"OK\"");
+  delay(1000);
+  ESP.restart();
+}
+void resetSettings() {
+  resetEEPROM();
+  server.send(200, "application/json", "\"OK\"");
+  delay(1000);
+  ESP.restart();
 }
 
 bool getSettings() {
@@ -620,6 +646,53 @@ bool setColor() {
   server.send(200, "application/json", server.arg("plain"));
   return true;
 }
+
+bool setBrightness() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  uint8_t b = server.arg("plain").toInt();
+  if (b < 0 && b > 255) {
+    server.send(400, "application/json", "Invalid brightness value");
+    return false;
+  }
+
+  if (server.arg("type") == "time") {
+    brightness = b;
+  } else if (server.arg("type") == "name") {
+    brightness = b;
+  } else if (server.arg("type") == "icon") {
+    brightness = b;
+  } else {
+    server.send(400, "application/json", "Type unknown");
+    return false;
+  }
+  pixels->setBrightness(brightness);
+  EEPROM.put(ADR_BRIGHTNESS, brightness);
+  EEPROM.commit();
+  matrix->draw();
+  server.send(200, "application/json", (String)b);
+  return true;
+}
+
+bool getBrightness() {
+  uint8_t b;
+  if (server.arg("type") == "time") {
+    b = brightness;
+  } else if (server.arg("type") == "name") {
+    b = brightness;
+  } else if (server.arg("type") == "icon") {
+    b = brightness;
+  } else {
+    server.send(400, "application/json", "Type unknown");
+    return false;
+  }
+  server.send(200, "application/json", (String)b);
+  return true;
+}
+
 bool getColor() {
   uint32_t color;
   if (server.arg("type") == "time") {
@@ -685,11 +758,6 @@ bool saveSettings() {
     server.send(400, "application/json", "Body could not be parsed");
     return false;
   }
-  if (JSONDocument["brightness"] >= 10 && JSONDocument["brightness"] <= 255) {
-    brightness = JSONDocument["brightness"];
-    pixels->setBrightness(brightness);
-    EEPROM.put(ADR_BRIGHTNESS, brightness);
-  }
   checkNightMode = JSONDocument["nm"];
   EEPROM.put(ADR_NM, checkNightMode);
 
@@ -721,10 +789,11 @@ bool handleFile(String&& path) {
  *                       Helpers/Other
  ***************************************************************/
 void resetEEPROM() {
-  print("empty entire EEPROM");
+  print("empty entire EEPROM " + String(EEPROM.length()));
   for (int i = 0; i < EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
+  EEPROM.commit();
 }
 
 /**

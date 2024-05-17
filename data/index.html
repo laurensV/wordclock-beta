@@ -57,10 +57,6 @@
         </div>
         <form @submit.prevent="saveSettings" class="settings" :class="{'show': showSettings}">
           <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
-            <label for="brightness" class="is-flex-grow-1">Brightness:</label>
-            <input v-model="brightness" type="range" id="brightness" name="brightness" min="10" max="255">
-          </div>
-          <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
             <label for="nm" class="is-flex-grow-1">Nightmode: </label>
             <input class="checkbox" type="checkbox" id="nm" name="nm" v-model="nm">
           </div>
@@ -82,7 +78,7 @@
             <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
           </div>
         </form>
-        <div class="columns is-multiline mt-4 is-mobile">
+        <div class="columns is-multiline mt-4 is-mobile mb-0">
           <div class="column is-4">
             <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 0}">
               <div class="has-text-centered"><a  @click="setMode('word_clock')" ><img src="/img/word_clock.svg" /></a></div>
@@ -99,11 +95,15 @@
         <div class="tabs is-centered is-medium">
           <ul>
             <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
-            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam</a></li>
-            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Icon</a></li>
+            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam/Foto</a></li>
+            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Tekens</a></li>
           </ul>
         </div>
-        <div id="picker" v-show="!loading" class="mt-6"></div>
+        <div id="picker" v-show="!loading"></div>
+        <div class="has-text-centered mt-4">
+          <input :disabled="brightness === null || loadingBrightness ? 'disabled' : null" @change="saveBrightness" style="width:100%; height: 50px;" list="values" v-model="brightness" type="range" id="brightness" name="brightness" min="1" max="255">
+          <div>Brightness: <b v-if="brightness === null || loadingBrightness">...</b><b v-else>{{Math.ceil(brightness/255 * 100)}}%</b></div>
+        </div>
         <div v-show="loading">Loading..</div>
       </div>
     </section>
@@ -132,6 +132,7 @@
         const colorType = ref('time');
         const loading = ref(false);
         const loadingSettings = ref(false);
+        const loadingBrightness = ref(false);
         const showSettings = ref(false);
         const brightness = ref();
         const nm = ref();
@@ -147,7 +148,6 @@
             loadingSettings.value = true;
             const response = await fetch(baseUrl + '/api/settings');
             const result = await response.json();
-            brightness.value = result.brightness;
             mode.value = result.mode;
             clockWidth.value = result.clock_width;
             clockHeight.value = result.clock_height;
@@ -187,7 +187,6 @@
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                brightness: parseInt(brightness.value),
                 nm: !!nm.value,
                 nm_start_h: parseInt(nm_start.value.split(":")[0]),
                 nm_start_m: parseInt(nm_start.value.split(":")[1]),
@@ -211,20 +210,20 @@
             if (!colorPicker) {
               colorPicker = new window.iro.ColorPicker("#picker", {
                 // Set the size of the color picker
-                width: 320,
+                width: 300,
                 // Set the initial color to pure red
                 color: color,
                 layout: [
                   {
                     component: iro.ui.Wheel,
                   },
-                  // { 
-                  //   component: window.iro.ui.Slider,
-                  //   options: {
-                  //     // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
-                  //     sliderType: 'saturation'
-                  //   }
-                  // },
+                  { 
+                    component: window.iro.ui.Slider,
+                    options: {
+                      // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
+                      sliderType: 'value'
+                    }
+                  },
                 ]
               });
               colorPicker.on('color:change', throttle(async function (color) {
@@ -256,12 +255,43 @@
           }
           loading.value = false;
         }
+        const getBrightness = async (type) => {
+          try {
+            loadingBrightness.value = true;
+            brightness.value = null;
+            const response = await fetch(baseUrl + '/api/brightness?type=' + type);
+            brightness.value = parseInt((await response.json()));
+          } catch (e) {
+            alert('Could not retrieve brightness');
+            console.error(e);
+          }
+          loadingBrightness.value = false;
+        }
+        const saveBrightness = async () => {
+          try {
+            loadingBrightness.value = true;
+            const response = await fetch(baseUrl + '/api/brightness?type=' + colorType.value, {
+              method: 'POST',
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(parseInt(brightness.value))
+            });
+            const result = await response.json();
+          } catch (e) {
+            alert('Could not save brightness');
+            console.error(e);
+          }
+          loadingBrightness.value = false;
+        }
         watch(colorType, async (newType) => {
           getColor(newType);
+          getBrightness(newType);
         })
         getSettings();
         onMounted(() => {
           getColor(colorType.value);
+          getBrightness(colorType.value);
         })
         return {
           colorType,
@@ -272,7 +302,9 @@
           brightness,
           loading,
           loadingSettings,
+          loadingBrightness,
           saveSettings,
+          saveBrightness,
           mode,
           setMode,
           clockWidth,

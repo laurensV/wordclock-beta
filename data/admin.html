@@ -9,7 +9,9 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <style>
-   
+   [disabled] {
+    pointer-events: none;
+   }
   </style>
 </head>
 
@@ -39,8 +41,20 @@
             Firmware Version: v{{version}}<br>
             Filesystem Version: v{{fsversion}}
           </div>
-          <div class="has-text-right mt-2">
-            <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
+          <div class="field is-grouped mt-2">
+            <p class="control">
+              <a :class="{'is-loading': loadingSettings}" @click="resetSettings" class="button is-inverted is-danger" disabled>
+                Reset Settings
+              </a>
+            </p>
+            <p class="control">
+              <a :class="{'is-loading': loadingSettings}" :disabled="loadingSettings ? 'disabled' : null" @click="resetWifi" class="button is-inverted is-danger">
+                Reset WIFI
+              </a>
+            </p>
+            <p class="control ml-auto">
+              <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
+            </p>
           </div>
         </form>
       </div>
@@ -113,11 +127,42 @@
           }
           loadingSettings.value = false;
         }
+
+        const resetWifi = async () => {
+          try {
+            loadingSettings.value = true;
+            if (confirm("Are you sure you want to reset your WIFI settings?")) {
+              const response = await fetch(baseUrl + '/api/admin/reset-wifi');
+              const result = await response.json();
+              alert('Restarting wordclock..');
+            }
+          } catch (e) {
+            alert('Could not reset wifi');
+            console.error(e);
+          }
+          loadingSettings.value = false;
+        }
+        const resetSettings = async () => {
+          try {
+            loadingSettings.value = true;
+            if (confirm("Are you sure you want to reset all settings (including clock layout)?")) {
+              const response = await fetch(baseUrl + '/api/admin/reset-settings');
+              const result = await response.json();
+              alert('Restarting wordclock..');
+            }
+          } catch (e) {
+            alert('Could not reset settings');
+            console.error(e);
+          }
+          loadingSettings.value = false;
+        }
         
         getSettings();
         return {
           loadingSettings,
           saveAdminSettings,
+          resetWifi,
+          resetSettings,
           clockWidth,
           clockHeight,
           clockLayout,
