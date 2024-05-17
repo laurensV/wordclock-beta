@@ -1,7 +1,7 @@
 {
   "type": "wordclock",
-  "firmware_version": 3,
-  "filesystem_version": 2,
+  "firmware_version": 4,
+  "filesystem_version": 4,
   "host": "raw.githubusercontent.com",
   "port": 443,
   "test": "test",
