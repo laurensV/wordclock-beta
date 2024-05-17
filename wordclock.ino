@@ -350,7 +350,7 @@ void setupOTA() {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
   FOTA = new esp8266FOTA("wordclock", VERSION, fileSystemVersion);
-  FOTA->checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
+  FOTA->checkURL = "https://raw.githubusercontent.com/laurensV/wordclock-beta/main/firmware/version.json";
   FOTA->onProgress(onUpdateProgress);
   FOTA->onEnd(onUpdateFinished);
   ArduinoOTA.onProgress(onUpdateProgress);
