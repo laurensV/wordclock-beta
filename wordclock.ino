@@ -39,6 +39,7 @@ Adafruit_NeoPixel* pixels;
 LEDMatrix* matrix;
 ESP8266WebServer server(80);
 bool NTPWorking = true;
+uint32_t rainbowHue = 0;
 
 // ----------------------------------------------------------------------------------
 //                                        SETUP
@@ -68,6 +69,17 @@ void loop() {
   ArduinoOTA.handle();
   server.handleClient();
 
+  switch (mode) {
+    case RAINBOW:
+      for (int i = 0; i < pixels->numPixels(); i++) {  // For each pixel in strip...
+        int pixelHue = rainbowHue + (i * 65536L / pixels->numPixels());
+        pixels->setPixelColor(i, pixels->gamma32(pixels->ColorHSV(pixelHue)));
+      }
+      pixels->show();
+      rainbowHue += 40; // Advance just a little along the color wheel
+      break;
+  }
+
   if (readTimeInterval()) {
     time_t timeNowUTC;
     struct tm* timeInfo;
@@ -81,15 +93,11 @@ void loop() {
       case WORD_CLOCK:
         timeString = timeToString(hours, minutes);
         print(timeString);
-        if (!nightMode) {
-          showTimeString(timeString);
-        }
+        showTimeString(timeString);
         break;
       case DIGITAL_CLOCK:
         print(String(hours) + ":" + String(minutes));
-        if (!nightMode) {
-          showDigitalTime(hours, minutes);
-        }
+        showDigitalTime(hours, minutes);
         break;
     }
     checkWifiDisconnect();
@@ -189,6 +197,10 @@ void setupPersistentVars() {
   if (!brightness) {
     brightness = 255;
   }
+  EEPROM.get(ADR_NM_BRIGHTNESS, nightModeBrightness);
+  if (!nightModeBrightness) {
+    nightModeBrightness = 0;
+  }
 
   EEPROM.get(ADR_COLOR_TIME, color_TIME);
   if (!color_TIME) {
@@ -201,11 +213,6 @@ void setupPersistentVars() {
   EEPROM.get(ADR_COLOR_ICON, color_ICON);
   if (!color_ICON) {
     color_ICON = WHITE;
-  }
-
-  EEPROM.get(ADR_BRIGHTNESS, brightness);
-  if (!brightness) {
-    brightness = 255;
   }
 
   EEPROM.get(ADR_NM, checkNightMode);
@@ -231,8 +238,9 @@ void setNightMode(int timeInMinutes) {
     nightMode = checkNightMode && timeInMinutes >= nightModeStartTime && timeInMinutes < nightModeEndTime;
   }
   if (nightMode) {
-    matrix->clear();
-    matrix->draw();
+    pixels->setBrightness(nightModeBrightness);
+  } else {
+    pixels->setBrightness(brightness);
   }
 }
 
@@ -589,7 +597,7 @@ void resetSettings() {
 }
 
 bool getSettings() {
-  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
+  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ",\"nm_brightness\": " + String(nightModeBrightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
   return true;
 }
 
@@ -606,6 +614,8 @@ bool setMode() {
     mode = WORD_CLOCK;
   } else if (newMode == "digital_clock") {
     mode = DIGITAL_CLOCK;
+  } else if (newMode == "rainbow") {
+    mode = RAINBOW;
   }
   EEPROM.put(ADR_MODE, mode);
   EEPROM.commit();
@@ -659,18 +669,21 @@ bool setBrightness() {
     return false;
   }
 
-  if (server.arg("type") == "time") {
+  if (server.arg("type") == "global") {
     brightness = b;
-  } else if (server.arg("type") == "name") {
-    brightness = b;
-  } else if (server.arg("type") == "icon") {
-    brightness = b;
+    EEPROM.put(ADR_BRIGHTNESS, brightness);
+  } else if (server.arg("type") == "nightmode") {
+    nightModeBrightness = b;
+    EEPROM.put(ADR_NM_BRIGHTNESS, nightModeBrightness);
   } else {
     server.send(400, "application/json", "Type unknown");
     return false;
   }
-  pixels->setBrightness(brightness);
-  EEPROM.put(ADR_BRIGHTNESS, brightness);
+  if (!nightMode) {
+    pixels->setBrightness(brightness);
+  } else {
+    pixels->setBrightness(nightModeBrightness);
+  }
   EEPROM.commit();
   matrix->draw();
   server.send(200, "application/json", (String)b);
@@ -679,12 +692,10 @@ bool setBrightness() {
 
 bool getBrightness() {
   uint8_t b;
-  if (server.arg("type") == "time") {
+  if (server.arg("type") == "global") {
     b = brightness;
-  } else if (server.arg("type") == "name") {
-    b = brightness;
-  } else if (server.arg("type") == "icon") {
-    b = brightness;
+  } else if (server.arg("type") == "nightmode") {
+    b = nightModeBrightness;
   } else {
     server.send(400, "application/json", "Type unknown");
     return false;
