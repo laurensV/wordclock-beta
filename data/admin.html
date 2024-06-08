@@ -43,7 +43,7 @@
           </div>
           <div class="field is-grouped mt-2">
             <p class="control">
-              <a :class="{'is-loading': loadingSettings}" @click="resetSettings" class="button is-inverted is-danger" disabled>
+              <a :class="{'is-loading': loadingSettings}" @click="resetSettings" :disabled="loadingSettings ? 'disabled' : null" class="button is-inverted is-danger">
                 Reset Settings
               </a>
             </p>

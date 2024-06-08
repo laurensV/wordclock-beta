@@ -107,14 +107,14 @@
             </div>
           </div>
         </div>
-        <div class="tabs is-centered is-medium">
+        <div class="tabs is-centered is-medium" v-if="mode !== 2">
           <ul>
             <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
             <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam/Foto</a></li>
             <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Tekens</a></li>
           </ul>
         </div>
-        <div id="picker" v-show="!loading"></div>
+        <div id="picker" v-show="!loading && mode !== 2"></div>
         <div v-show="loading">Loading..</div>
       </div>
     </section>
