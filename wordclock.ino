@@ -69,17 +69,6 @@ void loop() {
   ArduinoOTA.handle();
   server.handleClient();
 
-  switch (mode) {
-    case RAINBOW:
-      for (int i = 0; i < pixels->numPixels(); i++) {  // For each pixel in strip...
-        int pixelHue = rainbowHue + (i * 65536L / pixels->numPixels());
-        pixels->setPixelColor(i, pixels->gamma32(pixels->ColorHSV(pixelHue)));
-      }
-      pixels->show();
-      rainbowHue += 40; // Advance just a little along the color wheel
-      break;
-  }
-
   if (readTimeInterval()) {
     time_t timeNowUTC;
     struct tm* timeInfo;
@@ -91,6 +80,7 @@ void loop() {
     String timeString;
     switch (mode) {
       case WORD_CLOCK:
+      case RAINBOW:
         timeString = timeToString(hours, minutes);
         print(timeString);
         showTimeString(timeString);
@@ -101,6 +91,18 @@ void loop() {
         break;
     }
     checkWifiDisconnect();
+  }
+  switch (mode) {
+    case RAINBOW:
+      for (int i = 0; i < pixels->numPixels(); i++) {  // For each pixel in strip...
+        int pixelHue = rainbowHue + (i * 65536L / pixels->numPixels());
+        if (pixels->getPixelColor(i) != WHITE) {
+          pixels->setPixelColor(i, pixels->gamma32(pixels->ColorHSV(pixelHue)));
+        }
+      }
+      pixels->show();
+      rainbowHue += 40; // Advance just a little along the color wheel
+      break;
   }
 
   if (storeColorsInterval()) {
@@ -340,13 +342,13 @@ void printIP() {
     x += 4;
   }
   matrix->print(FONT_NUMBERS[address % 10], x, 6, LEDMatrix::OTHER);
-  matrix->draw();
+  matrix->draw(true);
 }
 
 void onWifiConnect() {
   setupOTA();
   setupServer();
-  logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
+  logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), w8123);
   printIP();
   configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
@@ -442,7 +444,7 @@ void showDigitalTime(int hours, int minutes) {
   matrix->print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
   showName();
-  matrix->draw();
+  matrix->draw(true);
 }
 
 void showTimeString(String timeString) {
@@ -484,7 +486,7 @@ void showTimeString(String timeString) {
     }
   }
   showName();
-  matrix->draw();
+  matrix->draw(mode != RAINBOW);
 }
 
 /**
@@ -651,7 +653,7 @@ bool setColor() {
     server.send(400, "application/json", "Color type unknown");
     return false;
   }
-  matrix->draw();
+  matrix->draw(true);
 
   server.send(200, "application/json", server.arg("plain"));
   return true;
@@ -685,7 +687,7 @@ bool setBrightness() {
     pixels->setBrightness(nightModeBrightness);
   }
   EEPROM.commit();
-  matrix->draw();
+  matrix->draw(true);
   server.send(200, "application/json", (String)b);
   return true;
 }
@@ -786,7 +788,7 @@ bool saveSettings() {
     EEPROM.put(ADR_NM_END_M, nightModeEndMin);
   }
   EEPROM.commit();
-  matrix->draw();
+  matrix->draw(true);
   server.send(200, "application/json", server.arg("plain"));
   return true;
 }
