@@ -1,6 +1,6 @@
 {
   "type": "wordclock",
-  "firmware_version": 6,
+  "firmware_version": 7,
   "filesystem_version": 6,
   "host": "raw.githubusercontent.com",
   "port": 443,
