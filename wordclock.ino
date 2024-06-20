@@ -348,7 +348,7 @@ void printIP() {
 void onWifiConnect() {
   setupOTA();
   setupServer();
-  logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), w8123);
+  logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
   configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
