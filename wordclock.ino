@@ -96,7 +96,9 @@ void loop() {
     case RAINBOW:
       for (int i = 0; i < pixels->numPixels(); i++) {  // For each pixel in strip...
         int pixelHue = rainbowHue + (i * 65536L / pixels->numPixels());
-        if (pixels->getPixelColor(i) != WHITE) {
+        if (matrix->leds[matrix->pixelRow(i)][matrix->pixelCol(i)] != LEDMatrix::TIME &&
+          matrix->leds[matrix->pixelRow(i)][matrix->pixelCol(i)] != LEDMatrix::ICON &&
+          matrix->leds[matrix->pixelRow(i)][matrix->pixelCol(i)] != LEDMatrix::NAME) {
           pixels->setPixelColor(i, pixels->gamma32(pixels->ColorHSV(pixelHue)));
         }
       }

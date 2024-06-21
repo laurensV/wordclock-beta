@@ -21,6 +21,8 @@ public:
   void clear(void);
   void draw(bool show);
   uint16_t pixelIndex(uint8_t row, uint8_t col);
+  uint8_t pixelRow(uint16_t i);
+  uint8_t pixelCol(uint16_t i);
   void print(const byte* ledbuffer, uint8_t xpos, uint8_t ypos, enum LED_TYPE type);
   enum LED_TYPE leds[20][20] = { OFF };
 

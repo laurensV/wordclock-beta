@@ -110,3 +110,15 @@ uint16_t LEDMatrix::pixelIndex(uint8_t row, uint8_t col) {
   // Even row, left to right
   return row * clockWidth + col;
 }
+
+uint8_t LEDMatrix::pixelRow(uint16_t i) {
+  return i / clockWidth;
+}
+uint8_t LEDMatrix::pixelCol(uint16_t i) {
+  uint8_t col = i % clockWidth;
+  if ((i / clockWidth) % 2) {
+    // Odd row, right to left
+    col = clockWidth - 1 - col;
+  }
+  return col;
+}
