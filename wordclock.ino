@@ -335,11 +335,14 @@ void printIP() {
   matrix->print(FONT_I, 1, 0, LEDMatrix::OTHER);
   matrix->print(FONT_P, 5, 0, LEDMatrix::OTHER);
   uint8_t x = 0;
+  // Show first number when it's not 0
   if (address / 100 != 0) {
     matrix->print(FONT_NUMBERS[(address / 100)], x, 6, LEDMatrix::OTHER);
     x += 4;
   }
-  if ((address / 10) % 10 != 0) {
+  // Show second number when it's not 0
+  // or when first number is not 0 (for example, hide for 005, but show for 105)
+  if (address / 100 != 0 || (address / 10) % 10 != 0) {
     matrix->print(FONT_NUMBERS[(address / 10) % 10], x, 6, LEDMatrix::OTHER);
     x += 4;
   }
