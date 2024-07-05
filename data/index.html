@@ -23,7 +23,7 @@
     }
 
     .settings.show {
-      height: 180px;
+      height: 280px;
     }
     .mode-link a:hover img {
       transform: scale(1.1);
@@ -56,33 +56,38 @@
           <a @click="showSettings = !showSettings"><img src="/img/settings.svg" style="height:30px" /></a>
         </div>
         <form @submit.prevent="saveSettings" class="settings" :class="{'show': showSettings}">
-          <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
-            <label for="brightness" class="is-flex-grow-1">Brightness:</label>
-            <input v-model="brightness" type="range" id="brightness" name="brightness" min="10" max="255">
+          <div class="mt-2">
+            <div>Helderheid <span v-if="nm">overdag</span>: <b v-if="brightness === null || loadingBrightness || loadingSettings">...</b><b v-else>{{Math.ceil(brightness/255 * 100)}}%</b></div>
+            <input :disabled="brightness === null || loadingBrightness || loadingSettings ? 'disabled' : null" @change="saveBrightness()" style="width:100%; height: 30px;" list="values" v-model="brightness" type="range" id="brightness" name="brightness" min="1" max="255">
           </div>
           <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
-            <label for="nm" class="is-flex-grow-1">Nightmode: </label>
+            <label for="nm" class="is-flex-grow-1">Nachtmodus: <b>{{nm ? 'aan' : 'uit'}}</b></label>
             <input class="checkbox" type="checkbox" id="nm" name="nm" v-model="nm">
           </div>
           <div class="is-flex is-justify-content-space-between is-align-items-center pb-2">
             <div>
-              <label class="is-flex-grow-1" for="nm_start" :class="{'has-text-grey': !nm}">start time: </label>
+              <label class="is-flex-grow-1" for="nm_start" :class="{'has-text-grey': !nm}">start tijd: </label>
               <input :required="nm" v-model="nm_start" :disabled="!nm" type="time" id="nm_start" name="nm_start" min="00:00"
                 max="23:59">
             </div>
             <div>
-              <label class="is-flex-grow-1" for="nm_end" :class="{'has-text-grey': !nm}">end time: </label>
+              <label class="is-flex-grow-1" for="nm_end" :class="{'has-text-grey': !nm}">eind tijd: </label>
               <input :required="nm" v-model="nm_end" :disabled="!nm" type="time" id="nm_end" name="nm_end" min="00:00" max="23:59">
             </div>
           </div>
+          <div class="mt-2">
+            <div :class="{'has-text-grey': !nm}">Helderheid 's nachts: <b v-if="nightmodeBrightness=== null || loadingBrightness || loadingSettings">...</b><b v-else>{{Math.ceil(nightmodeBrightness/255 * 100)}}%</b></div>
+            <input :disabled="!nm || nightmodeBrightness === null || loadingBrightness || loadingSettings ? 'disabled' : null" @change="saveBrightness(true)" style="width:100%; height: 30px;" list="values" v-model="nightmodeBrightness" type="range" id="nm_brightness" name="nm_brightness" min="0" max="255">
+          </div>
           <small class="is-pulled-left mt-3">
-            Firmware Version: <b>{{version}}</b>
+            Firmware Version: <b>v{{version}}</b><br>
+            Filesystem Version: <b>v{{fsversion}}</b>
           </small>
           <div class="has-text-right mt-2">
             <button :disabled="loadingSettings ? 'disabled' : null" class="button is-info" :class="{'is-loading': loadingSettings}" type="submit">Save Settings</button>
           </div>
         </form>
-        <div class="columns is-multiline mt-4 is-mobile">
+        <div class="columns is-multiline mt-4 is-mobile mb-0">
           <div class="column is-4">
             <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 0}">
               <div class="has-text-centered"><a  @click="setMode('word_clock')" ><img src="/img/word_clock.svg" /></a></div>
@@ -95,15 +100,21 @@
               <p class="has-text-centered">Digitale Klok</p>
             </div>
           </div>
+          <div class="column is-4">
+            <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 2}">
+              <div class="has-text-centered"><a  @click="setMode('rainbow')" ><img src="/img/rainbow.png" /></a></div>
+              <p class="has-text-centered">Regenboog</p>
+            </div>
+          </div>
         </div>
-        <div class="tabs is-centered is-medium">
+        <div class="tabs is-centered is-medium" v-if="mode !== 2">
           <ul>
             <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
-            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam</a></li>
-            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Icon</a></li>
+            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam/Foto</a></li>
+            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Tekens</a></li>
           </ul>
         </div>
-        <div id="picker" v-show="!loading" class="mt-6"></div>
+        <div id="picker" v-show="!loading && mode !== 2"></div>
         <div v-show="loading">Loading..</div>
       </div>
     </section>
@@ -132,8 +143,10 @@
         const colorType = ref('time');
         const loading = ref(false);
         const loadingSettings = ref(false);
+        const loadingBrightness = ref(false);
         const showSettings = ref(false);
         const brightness = ref();
+        const nightmodeBrightness = ref(); 
         const nm = ref();
         const nm_end = ref();
         const nm_start = ref();
@@ -142,17 +155,20 @@
         const clockHeight = ref();
         const clockLayout = ref();
         const version = ref();
+        const fsversion = ref();
         const getSettings = async () => {
           try {
             loadingSettings.value = true;
             const response = await fetch(baseUrl + '/api/settings');
             const result = await response.json();
-            brightness.value = result.brightness;
             mode.value = result.mode;
             clockWidth.value = result.clock_width;
             clockHeight.value = result.clock_height;
             clockLayout.value = result.clock_layout;
             version.value = result.version;
+            fsversion.value = result.fsversion;
+            brightness.value = result.brightness;
+            nightmodeBrightness.value = result.nm_brightness;
             nm.value = !!result.nm;
             nm_start.value = result.nm_start_h.toString().padStart(2, '0') + ":" + result.nm_start_m.toString().padStart(2, '0');
             nm_end.value = result.nm_end_h.toString().padStart(2, '0') + ":" + result.nm_end_m.toString().padStart(2, '0');
@@ -187,7 +203,6 @@
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                brightness: parseInt(brightness.value),
                 nm: !!nm.value,
                 nm_start_h: parseInt(nm_start.value.split(":")[0]),
                 nm_start_m: parseInt(nm_start.value.split(":")[1]),
@@ -211,20 +226,20 @@
             if (!colorPicker) {
               colorPicker = new window.iro.ColorPicker("#picker", {
                 // Set the size of the color picker
-                width: 320,
+                width: 300,
                 // Set the initial color to pure red
                 color: color,
                 layout: [
                   {
                     component: iro.ui.Wheel,
                   },
-                  // { 
-                  //   component: window.iro.ui.Slider,
-                  //   options: {
-                  //     // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
-                  //     sliderType: 'saturation'
-                  //   }
-                  // },
+                  { 
+                    component: window.iro.ui.Slider,
+                    options: {
+                      // can also be 'saturation', 'value', 'red', 'green', 'blue', 'alpha' or 'kelvin'
+                      sliderType: 'value'
+                    }
+                  },
                 ]
               });
               colorPicker.on('color:change', throttle(async function (color) {
@@ -256,6 +271,24 @@
           }
           loading.value = false;
         }
+
+        const saveBrightness = async (nightmode = false) => {
+          try {
+            loadingBrightness.value = true;
+            const response = await fetch(baseUrl + '/api/brightness?type=' + (nightmode ? 'nightmode' : 'global'), {
+              method: 'POST',
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(parseInt(nightmode ? nightmodeBrightness.value : brightness.value))
+            });
+            const result = await response.json();
+          } catch (e) {
+            alert('Could not save brightness');
+            console.error(e);
+          }
+          loadingBrightness.value = false;
+        }
         watch(colorType, async (newType) => {
           getColor(newType);
         })
@@ -270,15 +303,19 @@
           nm_start,
           nm_end,
           brightness,
+          nightmodeBrightness,
           loading,
           loadingSettings,
+          loadingBrightness,
           saveSettings,
+          saveBrightness,
           mode,
           setMode,
           clockWidth,
           clockHeight,
           clockLayout,
-          version
+          version,
+          fsversion
         }
       }
     }).mount('#app')

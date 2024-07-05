@@ -39,7 +39,7 @@ void LEDMatrix::clear(void) {
 /**
  * @brief Draws the led matrix to the neopixels
  */
-void LEDMatrix::draw() {
+void LEDMatrix::draw(bool show) {
   // loop over all leds in matrix
   for (int row = 0; row < clockWidth; row++) {
     for (int col = 0; col < clockHeight; col++) {
@@ -50,23 +50,36 @@ void LEDMatrix::draw() {
           break;
         case TIME:
           color = color_TIME;
+          if (mode == RAINBOW) {
+            // force time to white during rainbow
+            color = WHITE;
+          }
           break;
         case NAME:
           color = color_NAME;
+          if (mode == RAINBOW) {
+            // force time to white during rainbow
+            color = WHITE;
+          }
           break;
         case ICON:
           color = color_ICON;
+          if (mode == RAINBOW) {
+            // force time to white during rainbow
+            color = WHITE;
+          }
           break;
         case OTHER:
           color = GREEN;
           break;
       }
       uint16_t n;
-
       pixels->setPixelColor(pixelIndex(row, col), color);
     }
   }
-  pixels->show();
+  if (show) {
+    pixels->show();
+  }
 }
 
 /**
@@ -96,4 +109,16 @@ uint16_t LEDMatrix::pixelIndex(uint8_t row, uint8_t col) {
   }
   // Even row, left to right
   return row * clockWidth + col;
+}
+
+uint8_t LEDMatrix::pixelRow(uint16_t i) {
+  return i / clockWidth;
+}
+uint8_t LEDMatrix::pixelCol(uint16_t i) {
+  uint8_t col = i % clockWidth;
+  if ((i / clockWidth) % 2) {
+    // Odd row, right to left
+    col = clockWidth - 1 - col;
+  }
+  return col;
 }

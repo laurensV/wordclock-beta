@@ -39,6 +39,7 @@ Adafruit_NeoPixel* pixels;
 LEDMatrix* matrix;
 ESP8266WebServer server(80);
 bool NTPWorking = true;
+uint32_t rainbowHue = 0;
 
 // ----------------------------------------------------------------------------------
 //                                        SETUP
@@ -79,20 +80,31 @@ void loop() {
     String timeString;
     switch (mode) {
       case WORD_CLOCK:
+      case RAINBOW:
         timeString = timeToString(hours, minutes);
         print(timeString);
-        if (!nightMode) {
-          showTimeString(timeString);
-        }
+        showTimeString(timeString);
         break;
       case DIGITAL_CLOCK:
         print(String(hours) + ":" + String(minutes));
-        if (!nightMode) {
-          showDigitalTime(hours, minutes);
-        }
+        showDigitalTime(hours, minutes);
         break;
     }
     checkWifiDisconnect();
+  }
+  switch (mode) {
+    case RAINBOW:
+      for (int i = 0; i < pixels->numPixels(); i++) {  // For each pixel in strip...
+        int pixelHue = rainbowHue + (i * 65536L / pixels->numPixels());
+        if (matrix->leds[matrix->pixelRow(i)][matrix->pixelCol(i)] != LEDMatrix::TIME &&
+          matrix->leds[matrix->pixelRow(i)][matrix->pixelCol(i)] != LEDMatrix::ICON &&
+          matrix->leds[matrix->pixelRow(i)][matrix->pixelCol(i)] != LEDMatrix::NAME) {
+          pixels->setPixelColor(i, pixels->gamma32(pixels->ColorHSV(pixelHue)));
+        }
+      }
+      pixels->show();
+      rainbowHue += 40; // Advance just a little along the color wheel
+      break;
   }
 
   if (storeColorsInterval()) {
@@ -189,6 +201,10 @@ void setupPersistentVars() {
   if (!brightness) {
     brightness = 255;
   }
+  EEPROM.get(ADR_NM_BRIGHTNESS, nightModeBrightness);
+  if (!nightModeBrightness) {
+    nightModeBrightness = 0;
+  }
 
   EEPROM.get(ADR_COLOR_TIME, color_TIME);
   if (!color_TIME) {
@@ -201,11 +217,6 @@ void setupPersistentVars() {
   EEPROM.get(ADR_COLOR_ICON, color_ICON);
   if (!color_ICON) {
     color_ICON = WHITE;
-  }
-
-  EEPROM.get(ADR_BRIGHTNESS, brightness);
-  if (!brightness) {
-    brightness = 255;
   }
 
   EEPROM.get(ADR_NM, checkNightMode);
@@ -231,8 +242,9 @@ void setNightMode(int timeInMinutes) {
     nightMode = checkNightMode && timeInMinutes >= nightModeStartTime && timeInMinutes < nightModeEndTime;
   }
   if (nightMode) {
-    matrix->clear();
-    matrix->draw();
+    pixels->setBrightness(nightModeBrightness);
+  } else {
+    pixels->setBrightness(brightness);
   }
 }
 
@@ -323,16 +335,19 @@ void printIP() {
   matrix->print(FONT_I, 1, 0, LEDMatrix::OTHER);
   matrix->print(FONT_P, 5, 0, LEDMatrix::OTHER);
   uint8_t x = 0;
+  // Show first number when it's not 0
   if (address / 100 != 0) {
     matrix->print(FONT_NUMBERS[(address / 100)], x, 6, LEDMatrix::OTHER);
     x += 4;
   }
-  if ((address / 10) % 10 != 0) {
+  // Show second number when it's not 0
+  // or when first number is not 0 (for example, hide for 005, but show for 105)
+  if (address / 100 != 0 || (address / 10) % 10 != 0) {
     matrix->print(FONT_NUMBERS[(address / 10) % 10], x, 6, LEDMatrix::OTHER);
     x += 4;
   }
   matrix->print(FONT_NUMBERS[address % 10], x, 6, LEDMatrix::OTHER);
-  matrix->draw();
+  matrix->draw(true);
 }
 
 void onWifiConnect() {
@@ -413,13 +428,28 @@ void setupTime() {
   settimeofday_cb(time_set);
 }
 
+void showName() {
+  for (int i = 0; i < clockLayout.length(); i++) {
+    if (clockLayout.charAt(i) == '*') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::NAME);
+    } else if (clockLayout.charAt(i) == '&') {
+      int row = i / clockWidth;
+      int col = i % clockWidth;
+      matrix->setPixelType(row, col, LEDMatrix::ICON);
+    }
+  }
+}
+
 void showDigitalTime(int hours, int minutes) {
   matrix->clear();
   matrix->print(FONT_NUMBERS[(hours / 10)], 3, 0, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(hours % 10)], 7, 0, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes / 10)], 3, 6, LEDMatrix::TIME);
   matrix->print(FONT_NUMBERS[(minutes % 10)], 7, 6, LEDMatrix::TIME);
-  matrix->draw();
+  showName();
+  matrix->draw(true);
 }
 
 void showTimeString(String timeString) {
@@ -460,18 +490,8 @@ void showTimeString(String timeString) {
       break;
     }
   }
-  for (int i = 0; i < clockLayout.length(); i++) {
-    if (clockLayout.charAt(i) == '*') {
-      int row = i / clockWidth;
-      int col = i % clockWidth;
-      matrix->setPixelType(row, col, LEDMatrix::NAME);
-    } else if (clockLayout.charAt(i) == '&') {
-      int row = i / clockWidth;
-      int col = i % clockWidth;
-      matrix->setPixelType(row, col, LEDMatrix::ICON);
-    }
-  }
-  matrix->draw();
+  showName();
+  matrix->draw(mode != RAINBOW);
 }
 
 /**
@@ -540,6 +560,10 @@ void setupServer() {
     server.sendHeader("Access-Control-Allow-Headers", "*");
     server.send(204);
   });
+  server.on("/api/brightness", HTTP_OPTIONS, []() {
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.send(204);
+  });
   server.on("/api/color", HTTP_OPTIONS, []() {
     server.sendHeader("Access-Control-Allow-Headers", "*");
     server.send(204);
@@ -555,15 +579,32 @@ void setupServer() {
   server.on("/api/settings", HTTP_GET, getSettings);
   server.on("/api/settings", HTTP_POST, saveSettings);
   server.on("/api/admin/settings", HTTP_POST, saveAdminSettings);
+  server.on("/api/admin/reset-wifi", HTTP_GET, resetWifi);
+  server.on("/api/admin/reset-settings", HTTP_GET, resetSettings);
 
   server.on("/api/color", HTTP_POST, setColor);
+  server.on("/api/brightness", HTTP_POST, setBrightness);
   server.on("/api/color", HTTP_GET, getColor);
+  server.on("/api/brightness", HTTP_GET, getBrightness);
   server.on("/api/mode", HTTP_POST, setMode);
   server.begin();
 }
 
+void resetWifi() {
+  wifiManager.resetSettings();
+  server.send(200, "application/json", "\"OK\"");
+  delay(1000);
+  ESP.restart();
+}
+void resetSettings() {
+  resetEEPROM();
+  server.send(200, "application/json", "\"OK\"");
+  delay(1000);
+  ESP.restart();
+}
+
 bool getSettings() {
-  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
+  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ",\"nm_brightness\": " + String(nightModeBrightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
   return true;
 }
 
@@ -580,6 +621,8 @@ bool setMode() {
     mode = WORD_CLOCK;
   } else if (newMode == "digital_clock") {
     mode = DIGITAL_CLOCK;
+  } else if (newMode == "rainbow") {
+    mode = RAINBOW;
   }
   EEPROM.put(ADR_MODE, mode);
   EEPROM.commit();
@@ -615,11 +658,59 @@ bool setColor() {
     server.send(400, "application/json", "Color type unknown");
     return false;
   }
-  matrix->draw();
+  matrix->draw(true);
 
   server.send(200, "application/json", server.arg("plain"));
   return true;
 }
+
+bool setBrightness() {
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json", "Body not received");
+    return false;
+  }
+  uint8_t b = server.arg("plain").toInt();
+  if (b < 0 && b > 255) {
+    server.send(400, "application/json", "Invalid brightness value");
+    return false;
+  }
+
+  if (server.arg("type") == "global") {
+    brightness = b;
+    EEPROM.put(ADR_BRIGHTNESS, brightness);
+  } else if (server.arg("type") == "nightmode") {
+    nightModeBrightness = b;
+    EEPROM.put(ADR_NM_BRIGHTNESS, nightModeBrightness);
+  } else {
+    server.send(400, "application/json", "Type unknown");
+    return false;
+  }
+  if (!nightMode) {
+    pixels->setBrightness(brightness);
+  } else {
+    pixels->setBrightness(nightModeBrightness);
+  }
+  EEPROM.commit();
+  matrix->draw(true);
+  server.send(200, "application/json", (String)b);
+  return true;
+}
+
+bool getBrightness() {
+  uint8_t b;
+  if (server.arg("type") == "global") {
+    b = brightness;
+  } else if (server.arg("type") == "nightmode") {
+    b = nightModeBrightness;
+  } else {
+    server.send(400, "application/json", "Type unknown");
+    return false;
+  }
+  server.send(200, "application/json", (String)b);
+  return true;
+}
+
 bool getColor() {
   uint32_t color;
   if (server.arg("type") == "time") {
@@ -685,11 +776,6 @@ bool saveSettings() {
     server.send(400, "application/json", "Body could not be parsed");
     return false;
   }
-  if (JSONDocument["brightness"] >= 10 && JSONDocument["brightness"] <= 255) {
-    brightness = JSONDocument["brightness"];
-    pixels->setBrightness(brightness);
-    EEPROM.put(ADR_BRIGHTNESS, brightness);
-  }
   checkNightMode = JSONDocument["nm"];
   EEPROM.put(ADR_NM, checkNightMode);
 
@@ -707,7 +793,7 @@ bool saveSettings() {
     EEPROM.put(ADR_NM_END_M, nightModeEndMin);
   }
   EEPROM.commit();
-  matrix->draw();
+  matrix->draw(true);
   server.send(200, "application/json", server.arg("plain"));
   return true;
 }
@@ -721,10 +807,11 @@ bool handleFile(String&& path) {
  *                       Helpers/Other
  ***************************************************************/
 void resetEEPROM() {
-  print("empty entire EEPROM");
+  print("empty entire EEPROM " + String(EEPROM.length()));
   for (int i = 0; i < EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
+  EEPROM.commit();
 }
 
 /**
