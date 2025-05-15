@@ -81,7 +81,11 @@ void loop() {
     switch (mode) {
       case WORD_CLOCK:
       case RAINBOW:
-        timeString = timeToString(hours, minutes);
+        if (clockLayout.indexOf("OCLOCK", 0) >= 0) {
+          timeString = timeToStringEnglish(hours, minutes);
+        } else {
+          timeString = timeToStringDutch(hours, minutes);
+        }
         print(timeString);
         showTimeString(timeString);
         break;
@@ -495,13 +499,13 @@ void showTimeString(String timeString) {
 }
 
 /**
- * @brief Converts the given time as sentence (String)
+ * @brief Converts the given time as sentence in Dutch (String)
  *
  * @param hours hours of the time value
  * @param minutes minutes of the time value
  * @return String time as sentence
  */
-String timeToString(uint8_t hours, uint8_t minutes) {
+String timeToStringDutch(uint8_t hours, uint8_t minutes) {
   String message = "HET IS ";
 
   String minuteWords[] = { "EEN", "TWEE", "DRIE", "VIER", "VIJF", "ZES", "ZEVEN", "ACHT", "NEGEN", "TIEN", "ELF", "TWAALF", "DERTIEN", "VEERTIEN", "KWART", "ZES TIEN", "ZEVEN TIEN", "ACHT TIEN", "NEGEN TIEN" };
@@ -526,6 +530,36 @@ String timeToString(uint8_t hours, uint8_t minutes) {
 
   if (minutes == 0) message += "UUR ";
 
+  return message;
+}
+
+/**
+ * @brief Converts the given time as sentence in English (String)
+ *
+ * @param hours hours of the time value
+ * @param minutes minutes of the time value
+ * @return String time as sentence
+ */
+String timeToStringEnglish(uint8_t hours, uint8_t minutes) {
+  String message = "IT IS ";
+
+  String minuteWords[] = { "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "THIR TEEN", "FOUR TEEN", "A QUARTER", "SIX TEEN", "SEVEN TEEN", "EIGHTEEN", "NINE TEEN", "TWENTY", "TWENTY ONE", "TWENTY TWO", "TWENTY THREE", "TWENTY FOUR", "TWENTY FIVE", "TWENTY SIX", "TWENTY SEVEN", "TWENTY EIGHT", "TWENTY NINE", "HALF" };
+  // show minutes
+  if (minutes > 0 && minutes <= 30) {
+    message += minuteWords[minutes - 1] + " PAST ";
+  } else if (minutes > 30 && minutes <= 59) {
+    message += minuteWords[59 - minutes] + " TO ";
+  }
+
+  String AMPM = hours >= 12 ? "PM" : "AM";
+  // convert hours to 12h format
+  if (hours >= 12) hours -= 12;
+  if (minutes > 30) hours++;
+  if (hours == 0) hours = 12;
+  message += minuteWords[hours - 1] + " ";
+
+  if (minutes == 0) message += "OCLOCK ";
+  message += AMPM;
   return message;
 }
 
