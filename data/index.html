@@ -117,37 +117,37 @@
         </div>
         <form @submit.prevent="saveSettings" class="settings" :class="{'show': showSettings, 'overflow-visible': showTimezoneDropdown}">
           <div class="mt-2">
-            <div>Helderheid <span v-if="nm">overdag</span>: <b v-if="brightness === null || loadingBrightness || loadingSettings">...</b><b v-else>{{Math.ceil(brightness/255 * 100)}}%</b></div>
+            <div>{{isEnglish ? 'Brightness' : 'Helderheid'}} <span v-if="nm">{{isEnglish ? 'during the day' : 'overdag'}}</span>: <b v-if="brightness === null || loadingBrightness || loadingSettings">...</b><b v-else>{{Math.ceil(brightness/255 * 100)}}%</b></div>
             <input :disabled="brightness === null || loadingBrightness || loadingSettings ? 'disabled' : null" @change="saveBrightness()" style="width:100%; height: 30px;" list="values" v-model="brightness" type="range" id="brightness" name="brightness" min="1" max="255">
           </div>
           <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
-            <label for="nm" class="is-flex-grow-1">Nachtmodus: <b>{{nm ? 'aan' : 'uit'}}</b></label>
+            <label for="nm" class="is-flex-grow-1">{{isEnglish ? 'Nightmode:' : 'Nachtmodus:'}} <b>{{nm ? (isEnglish ? 'on' : 'aan') : (isEnglish ? 'off' : 'uit')}}</b></label>
             <input class="checkbox" type="checkbox" id="nm" name="nm" v-model="nm">
           </div>
           <div class="is-flex is-justify-content-space-between is-align-items-center pb-2">
             <div>
-              <label class="is-flex-grow-1" for="nm_start" :class="{'has-text-grey': !nm}">start tijd: </label>
+              <label class="is-flex-grow-1" for="nm_start" :class="{'has-text-grey': !nm}">{{isEnglish ? 'start time:' : 'start tijd:'}} </label>
               <input :required="nm" v-model="nm_start" :disabled="!nm" type="time" id="nm_start" name="nm_start" min="00:00"
                 max="23:59">
             </div>
             <div>
-              <label class="is-flex-grow-1" for="nm_end" :class="{'has-text-grey': !nm}">eind tijd: </label>
+              <label class="is-flex-grow-1" for="nm_end" :class="{'has-text-grey': !nm}">{{isEnglish ? 'end time:' : 'eind tijd:'}} </label>
               <input :required="nm" v-model="nm_end" :disabled="!nm" type="time" id="nm_end" name="nm_end" min="00:00" max="23:59">
             </div>
           </div>
           <div class="mt-2">
-            <div :class="{'has-text-grey': !nm}">Helderheid 's nachts: <b v-if="nightmodeBrightness=== null || loadingBrightness || loadingSettings">...</b><b v-else>{{Math.ceil(nightmodeBrightness/255 * 100)}}%</b></div>
+            <div :class="{'has-text-grey': !nm}">{{isEnglish ? 'Brightness at night' : 'Helderheid \'s nachts:'}} <b v-if="nightmodeBrightness=== null || loadingBrightness || loadingSettings">...</b><b v-else>{{Math.ceil(nightmodeBrightness/255 * 100)}}%</b></div>
             <input :disabled="!nm || nightmodeBrightness === null || loadingBrightness || loadingSettings ? 'disabled' : null" @change="saveBrightness(true)" style="width:100%; height: 30px;" list="values" v-model="nightmodeBrightness" type="range" id="nm_brightness" name="nm_brightness" min="0" max="255">
           </div>
           <div class="is-flex is-justify-content-space-between is-align-items-center py-2">
-            <label for="timezone" class="is-flex-grow-1">Timezone:</label>
+            <label for="timezone" class="is-flex-grow-1">{{isEnglish ? 'Timezone:' : 'Tijdzone:'}}</label>
             <div class="timezone-dropdown is-flex-grow-1">
               <div class="timezone-input" @click="toggleTimezoneDropdown">
                 {{ getTimezoneDisplayName(timezone) }}
               </div>
               <div class="timezone-dropdown-content" :class="{'show': showTimezoneDropdown}">
                 <div class="timezone-search">
-                  <input type="text" placeholder="Search timezone..." v-model="timezoneSearch" @input="filterTimezones">
+                  <input type="text" :placeholder="isEnglish ? 'Search timezone...' : 'Tijdzone zoeken...'" v-model="timezoneSearch" @input="filterTimezones">
                 </div>
                 <div v-for="group in filteredTimezoneGroups" :key="group.continent">
                   <div class="timezone-group">{{ group.continent }}</div>
@@ -175,27 +175,27 @@
           <div class="column is-4">
             <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 0}">
               <div class="has-text-centered"><a  @click="setMode('word_clock')" ><img src="/img/word_clock.svg" /></a></div>
-              <p class="has-text-centered">Woord Klok</p>
+              <p class="has-text-centered">{{isEnglish ? 'Word Clock' : 'Woord Klok'}}</p>
             </div>
           </div>
           <div class="column is-4">
             <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 1}">
               <div class="has-text-centered"><a  @click="setMode('digital_clock')" ><img src="/img/digital_clock.svg" /></a></div>
-              <p class="has-text-centered">Digitale Klok</p>
+              <p class="has-text-centered">{{isEnglish ? 'Digital Clock' : 'Digitale Klok'}}</p>
             </div>
           </div>
           <div class="column is-4">
             <div class="mode-link" :disabled="loadingSettings ? 'disabled' : null" :class="{'is-active': mode === 2}">
               <div class="has-text-centered"><a  @click="setMode('rainbow')" ><img src="/img/rainbow.png" /></a></div>
-              <p class="has-text-centered">Regenboog</p>
+              <p class="has-text-centered">{{isEnglish ? 'Rainbow' : 'Regenboog'}}</p>
             </div>
           </div>
         </div>
         <div class="tabs is-centered is-medium" v-if="mode !== 2">
           <ul>
-            <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>Tijd</a></li>
-            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>Naam/Foto</a></li>
-            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>Tekens</a></li>
+            <li :class="{'is-active': colorType === 'time'}" @click="colorType = 'time'"><a>{{isEnglish ? 'Time' : 'Tijd'}}</a></li>
+            <li v-if="clockLayout && clockLayout.includes('*')" :class="{'is-active': colorType === 'name'}" @click="colorType = 'name'"><a>{{isEnglish ? 'Name/Picture' : 'Naam/Foto'}}</a></li>
+            <li v-if="clockLayout && clockLayout.includes('&')" :class="{'is-active': colorType === 'icon'}" @click="colorType = 'icon'"><a>{{isEnglish ? 'Icons' : 'Tekens'}}</a></li>
           </ul>
         </div>
         <div id="picker" v-show="!loading && mode !== 2"></div>
@@ -220,7 +220,7 @@
     }
     let colorPicker;
     let tabChange = false;
-    const baseUrl = '';
+    const baseUrl = 'http://192.168.1.159';
 
     createApp({
       setup() {
@@ -726,6 +726,11 @@
             timezones: groups[continent].sort((a, b) => a.name.localeCompare(b.name))
           }));
         });
+
+        const isEnglish = computed(() => {
+          if(clockLayout.value && clockLayout.value.includes("OCLOCK")) return true;
+          return false;
+        })
         
         const filteredTimezoneGroups = computed(() => {
           if (!timezoneSearch.value) {
@@ -956,7 +961,8 @@
           getTimezoneDisplayName,
           toggleTimezoneDropdown,
           selectTimezone,
-          filterTimezones
+          filterTimezones,
+          isEnglish
         }
       }
     }).mount('#app')
