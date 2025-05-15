@@ -234,6 +234,13 @@ void setupPersistentVars() {
     nightModeEndHour = 7;
     nightModeEndMin = 0;
   }
+
+  EEPROM.get(ADR_TIMEZONE, timezone_string);
+  if (timezone_string[0] == '\0' || timezone_string[0] == 0xFF) { // Check if empty or uninitialized (0xFF)
+    strcpy(timezone_string, "CET-1CEST,M3.5.0,M10.5.0/3"); // POSIX string for Europe/Amsterdam
+    EEPROM.put(ADR_TIMEZONE, timezone_string);
+    EEPROM.commit(); // Commit immediately after setting a default
+  }
 }
 
 void setNightMode(int timeInMinutes) {
@@ -359,7 +366,7 @@ void onWifiConnect() {
   setupServer();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
-  configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
+  configTime(timezone_string, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
 
 /***************************************************************
@@ -404,7 +411,7 @@ void onUpdateFinished() {
  ***************************************************************/
 void setupTime() {
   // Set timezone
-  setTZ(TIMEZONE);
+  setTZ(timezone_string);
   // Start the I2C interface (needed for DS3231 clock)
   Wire.begin();
   rtc.setClockMode(false);
@@ -638,7 +645,7 @@ void resetSettings() {
 }
 
 bool getSettings() {
-  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ",\"nm_brightness\": " + String(nightModeBrightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
+  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ",\"nm_brightness\": " + String(nightModeBrightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\", \"timezone\": \"" + String(timezone_string) + "\"}");
   return true;
 }
 
@@ -804,12 +811,23 @@ bool saveSettings() {
     server.send(400, "application/json", "Body not received");
     return false;
   }
-  StaticJsonDocument<300> JSONDocument;
+  StaticJsonDocument<500> JSONDocument;
   DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
   if (err) { //Check for errors in parsing
     server.send(400, "application/json", "Body could not be parsed");
     return false;
   }
+
+  if (JSONDocument.containsKey("timezone")) {
+    const char* tz = JSONDocument["timezone"];
+    strncpy(timezone_string, tz, sizeof(timezone_string) - 1);
+    timezone_string[sizeof(timezone_string) - 1] = '\0'; // Ensure null termination
+    EEPROM.put(ADR_TIMEZONE, timezone_string);
+    // Update tz runtime
+    setTZ(timezone_string);
+    configTime(timezone_string, "pool.ntp.org", "time.cloudflare.com", "time.google.com"); // Re-config time with new TZ
+  }
+
   checkNightMode = JSONDocument["nm"];
   EEPROM.put(ADR_NM, checkNightMode);
 

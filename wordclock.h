@@ -11,7 +11,6 @@
 #define PERIOD_NTP_CHECK PERIOD_NTP_UPDATE*3  // check if NTP is still responding
 #define AP_SSID "JouwWoordklok"               // WiFi Name when setting up clock
 #define HOSTNAME "jouwwoordklok"              // Hostname of clock
-#define TIMEZONE TZ_Europe_Amsterdam          // local timezone to account for DST
 #define AUTO_UPDATE true                      // automatically pull firmware and filesystem updates from remote server
 #define NEOPIXEL_PIN 0                        // pin to which the NeoPixels are attached
 
@@ -31,8 +30,9 @@
 #define ADR_CLOCK_HEIGHT  (ADR_CLOCK_WIDTH + sizeof(uint8_t))           // uint8_t
 #define ADR_CLOCK_LAYOUT  (ADR_CLOCK_HEIGHT + sizeof(uint8_t))          // 20 * 20 char
 #define ADR_NM_BRIGHTNESS (ADR_CLOCK_LAYOUT + (sizeof(char) * 20 * 20)) // uint8_t
+#define ADR_TIMEZONE      (ADR_NM_BRIGHTNESS + sizeof(uint8_t))         // char[50]
 
-#define EEPROM_SIZE       (ADR_NM_BRIGHTNESS + sizeof(uint8_t))
+#define EEPROM_SIZE       (ADR_TIMEZONE + (sizeof(char) * 50))
 
 // ----------------------------------------------------------------------------------
 //                              FUNCTIONS & VARS
@@ -54,6 +54,7 @@ inline uint8_t nightModeBrightness;
 inline uint8_t clockWidth;
 inline uint8_t clockHeight;
 inline String clockLayout;
+inline char timezone_string[50];
 
 void print(String message, bool newline = true);
 void print(int number, bool newline = true);
