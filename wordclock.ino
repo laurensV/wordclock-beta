@@ -25,6 +25,26 @@ int VERSION = {
 #include "VERSION.h"  
 };
 
+// Helper function to strip _INDEX from timezone string
+String getActualPOSIXString(const char* indexedTZ) {
+  String tz = String(indexedTZ);
+  int lastUnderscore = tz.lastIndexOf('_');
+  if (lastUnderscore > 0 && lastUnderscore < tz.length() - 1) {
+    // Check if characters after '_' are all digits
+    bool allDigits = true;
+    for (int i = lastUnderscore + 1; i < tz.length(); i++) {
+      if (!isDigit(tz.charAt(i))) {
+        allDigits = false;
+        break;
+      }
+    }
+    if (allDigits) {
+      return tz.substring(0, lastUnderscore);
+    }
+  }
+  return tz; // Return original if no valid _INDEX found
+}
+
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
@@ -236,8 +256,8 @@ void setupPersistentVars() {
   }
 
   EEPROM.get(ADR_TIMEZONE, timezone_string);
-  if (timezone_string[0] == '\0' || timezone_string[0] == 0xFF) { // Check if empty or uninitialized (0xFF)
-    strcpy(timezone_string, "CET-1CEST,M3.5.0,M10.5.0/3"); // POSIX string for Europe/Amsterdam
+  if (timezone_string[0] == '\\0' || timezone_string[0] == 0xFF) { // Check if empty or uninitialized (0xFF)
+    strcpy(timezone_string, "CET-1CEST,M3.5.0,M10.5.0/3_2"); // Default POSIX string for Europe/Amsterdam with index
     EEPROM.put(ADR_TIMEZONE, timezone_string);
     EEPROM.commit(); // Commit immediately after setting a default
   }
@@ -366,7 +386,8 @@ void onWifiConnect() {
   setupServer();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
-  configTime(timezone_string, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
+  String actualPOSIX = getActualPOSIXString(timezone_string);
+  configTime(actualPOSIX.c_str(), "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
 
 /***************************************************************
@@ -411,7 +432,8 @@ void onUpdateFinished() {
  ***************************************************************/
 void setupTime() {
   // Set timezone
-  setTZ(timezone_string);
+  String actualPOSIX = getActualPOSIXString(timezone_string);
+  setTZ(actualPOSIX.c_str());
   // Start the I2C interface (needed for DS3231 clock)
   Wire.begin();
   rtc.setClockMode(false);
@@ -819,13 +841,14 @@ bool saveSettings() {
   }
 
   if (JSONDocument.containsKey("timezone")) {
-    const char* tz = JSONDocument["timezone"];
-    strncpy(timezone_string, tz, sizeof(timezone_string) - 1);
-    timezone_string[sizeof(timezone_string) - 1] = '\0'; // Ensure null termination
+    const char* tz_from_client = JSONDocument["timezone"];
+    strncpy(timezone_string, tz_from_client, sizeof(timezone_string) - 1);
+    timezone_string[sizeof(timezone_string) - 1] = '\\0'; // Ensure null termination
     EEPROM.put(ADR_TIMEZONE, timezone_string);
     // Update tz runtime
-    setTZ(timezone_string);
-    configTime(timezone_string, "pool.ntp.org", "time.cloudflare.com", "time.google.com"); // Re-config time with new TZ
+    String actualPOSIX = getActualPOSIXString(timezone_string);
+    setTZ(actualPOSIX.c_str());
+    configTime(actualPOSIX.c_str(), "pool.ntp.org", "time.cloudflare.com", "time.google.com"); // Re-config time with new TZ
   }
 
   checkNightMode = JSONDocument["nm"];
