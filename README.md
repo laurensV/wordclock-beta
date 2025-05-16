@@ -1,4 +1,4 @@
-## Wordclock Arduino
+## Wordclock
 #### Components:
  * ESP8266
  * Neopixel ledstrip

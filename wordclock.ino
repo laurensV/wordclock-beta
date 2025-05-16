@@ -25,6 +25,26 @@ int VERSION = {
 #include "VERSION.h"  
 };
 
+// Helper function to strip _INDEX from timezone string
+String getActualPOSIXString(const char* indexedTZ) {
+  String tz = String(indexedTZ);
+  int lastUnderscore = tz.lastIndexOf('_');
+  if (lastUnderscore > 0 && lastUnderscore < tz.length() - 1) {
+    // Check if characters after '_' are all digits
+    bool allDigits = true;
+    for (int i = lastUnderscore + 1; i < tz.length(); i++) {
+      if (!isDigit(tz.charAt(i))) {
+        allDigits = false;
+        break;
+      }
+    }
+    if (allDigits) {
+      return tz.substring(0, lastUnderscore);
+    }
+  }
+  return tz; // Return original if no valid _INDEX found
+}
+
 // ----------------------------------------------------------------------------------
 //                                    GLOBAL VARIABLES
 // ----------------------------------------------------------------------------------
@@ -81,7 +101,11 @@ void loop() {
     switch (mode) {
       case WORD_CLOCK:
       case RAINBOW:
-        timeString = timeToString(hours, minutes);
+        if (clockLayout.indexOf("OCLOCK", 0) >= 0) {
+          timeString = timeToStringEnglish(hours, minutes);
+        } else {
+          timeString = timeToStringDutch(hours, minutes);
+        }
         print(timeString);
         showTimeString(timeString);
         break;
@@ -230,6 +254,13 @@ void setupPersistentVars() {
     nightModeEndHour = 7;
     nightModeEndMin = 0;
   }
+
+  EEPROM.get(ADR_TIMEZONE, timezone_string);
+  if (timezone_string[0] == '\\0' || timezone_string[0] == 0xFF) { // Check if empty or uninitialized (0xFF)
+    strcpy(timezone_string, "CET-1CEST,M3.5.0,M10.5.0/3_2"); // Default POSIX string for Europe/Amsterdam with index
+    EEPROM.put(ADR_TIMEZONE, timezone_string);
+    EEPROM.commit(); // Commit immediately after setting a default
+  }
 }
 
 void setNightMode(int timeInMinutes) {
@@ -355,7 +386,8 @@ void onWifiConnect() {
   setupServer();
   logger = UDPLogger(WiFi.localIP(), IPAddress(230, 120, 10, 2), 8123);
   printIP();
-  configTime(TIMEZONE, "pool.ntp.org", "time.cloudflare.com", "time.google.com");
+  String actualPOSIX = getActualPOSIXString(timezone_string);
+  configTime(actualPOSIX.c_str(), "pool.ntp.org", "time.cloudflare.com", "time.google.com");
 }
 
 /***************************************************************
@@ -365,7 +397,7 @@ void setupOTA() {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.begin();
   FOTA = new esp8266FOTA("wordclock", VERSION, fileSystemVersion);
-  FOTA->checkURL = "https://raw.githubusercontent.com/laurensV/wordclock-beta/main/firmware/version.json";
+  FOTA->checkURL = "https://raw.githubusercontent.com/laurensV/wordclock/main/firmware/version.json";
   FOTA->onProgress(onUpdateProgress);
   FOTA->onEnd(onUpdateFinished);
   ArduinoOTA.onProgress(onUpdateProgress);
@@ -400,7 +432,8 @@ void onUpdateFinished() {
  ***************************************************************/
 void setupTime() {
   // Set timezone
-  setTZ(TIMEZONE);
+  String actualPOSIX = getActualPOSIXString(timezone_string);
+  setTZ(actualPOSIX.c_str());
   // Start the I2C interface (needed for DS3231 clock)
   Wire.begin();
   rtc.setClockMode(false);
@@ -495,13 +528,13 @@ void showTimeString(String timeString) {
 }
 
 /**
- * @brief Converts the given time as sentence (String)
+ * @brief Converts the given time as sentence in Dutch (String)
  *
  * @param hours hours of the time value
  * @param minutes minutes of the time value
  * @return String time as sentence
  */
-String timeToString(uint8_t hours, uint8_t minutes) {
+String timeToStringDutch(uint8_t hours, uint8_t minutes) {
   String message = "HET IS ";
 
   String minuteWords[] = { "EEN", "TWEE", "DRIE", "VIER", "VIJF", "ZES", "ZEVEN", "ACHT", "NEGEN", "TIEN", "ELF", "TWAALF", "DERTIEN", "VEERTIEN", "KWART", "ZES TIEN", "ZEVEN TIEN", "ACHT TIEN", "NEGEN TIEN" };
@@ -526,6 +559,36 @@ String timeToString(uint8_t hours, uint8_t minutes) {
 
   if (minutes == 0) message += "UUR ";
 
+  return message;
+}
+
+/**
+ * @brief Converts the given time as sentence in English (String)
+ *
+ * @param hours hours of the time value
+ * @param minutes minutes of the time value
+ * @return String time as sentence
+ */
+String timeToStringEnglish(uint8_t hours, uint8_t minutes) {
+  String message = "IT IS ";
+
+  String minuteWords[] = { "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "THIR TEEN", "FOUR TEEN", "A QUARTER", "SIX TEEN", "SEVEN TEEN", "EIGHTEEN", "NINE TEEN", "TWENTY", "TWENTY ONE", "TWENTY TWO", "TWENTY THREE", "TWENTY FOUR", "TWENTY FIVE", "TWENTY SIX", "TWENTY SEVEN", "TWENTY EIGHT", "TWENTY NINE", "HALF" };
+  // show minutes
+  if (minutes > 0 && minutes <= 30) {
+    message += minuteWords[minutes - 1] + " PAST ";
+  } else if (minutes > 30 && minutes <= 59) {
+    message += minuteWords[59 - minutes] + " TO ";
+  }
+
+  String AMPM = hours >= 12 ? "PM" : "AM";
+  // convert hours to 12h format
+  if (hours >= 12) hours -= 12;
+  if (minutes > 30) hours++;
+  if (hours == 0) hours = 12;
+  message += minuteWords[hours - 1] + " ";
+
+  if (minutes == 0) message += "OCLOCK ";
+  message += AMPM;
   return message;
 }
 
@@ -604,7 +667,7 @@ void resetSettings() {
 }
 
 bool getSettings() {
-  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ",\"nm_brightness\": " + String(nightModeBrightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\"}");
+  server.send(200, "application/json", "{\"version\": " + String(VERSION) + ", \"fsversion\": " + String(fileSystemVersion) + ", \"mode\": " + String(mode) + ",\"brightness\": " + String(brightness) + ",\"nm_brightness\": " + String(nightModeBrightness) + ", \"nm\": " + String(checkNightMode) + ", \"nm_start_h\": " + String(nightModeStartHour) + ", \"nm_start_m\": " + String(nightModeStartMin) + ", \"nm_end_h\": " + String(nightModeEndHour) + ", \"nm_end_m\": " + String(nightModeEndMin) + ", \"clock_width\": " + String(clockWidth) + ", \"clock_height\": " + String(clockHeight) + ", \"clock_layout\": \"" + clockLayout + "\", \"timezone\": \"" + String(timezone_string) + "\"}");
   return true;
 }
 
@@ -770,12 +833,24 @@ bool saveSettings() {
     server.send(400, "application/json", "Body not received");
     return false;
   }
-  StaticJsonDocument<300> JSONDocument;
+  StaticJsonDocument<500> JSONDocument;
   DeserializationError err = deserializeJson(JSONDocument, server.arg("plain"));
   if (err) { //Check for errors in parsing
     server.send(400, "application/json", "Body could not be parsed");
     return false;
   }
+
+  if (JSONDocument.containsKey("timezone")) {
+    const char* tz_from_client = JSONDocument["timezone"];
+    strncpy(timezone_string, tz_from_client, sizeof(timezone_string) - 1);
+    timezone_string[sizeof(timezone_string) - 1] = '\\0'; // Ensure null termination
+    EEPROM.put(ADR_TIMEZONE, timezone_string);
+    // Update tz runtime
+    String actualPOSIX = getActualPOSIXString(timezone_string);
+    setTZ(actualPOSIX.c_str());
+    configTime(actualPOSIX.c_str(), "pool.ntp.org", "time.cloudflare.com", "time.google.com"); // Re-config time with new TZ
+  }
+
   checkNightMode = JSONDocument["nm"];
   EEPROM.put(ADR_NM, checkNightMode);
 
